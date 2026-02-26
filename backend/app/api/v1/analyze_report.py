@@ -31,6 +31,7 @@ from app.agents.deep_reader.detect_pdf_type import detect_pdf_type
 from app.agents.deep_reader.extract_text import extract_text, get_full_text
 from app.agents.restatement_detector import RestatementDetector
 from app.agents.orchestrator import orchestrate_decision, BASE_RATE_PCT, BASE_LIMIT_CR
+from app.agents.deep_reader.text_cleaner import clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,11 @@ async def analyze_report(request: Request):
                     "message": f"Sections detected but no text extracted (pdf_type={pdf_type}, coverage={extraction_stats.get('extraction_coverage', 0):.1f}%)."
                 }
                 continue
+
+            # === NEW: APPLY BRSR TEXT CLEANING HERE ===
+            auditor_text = await run_in_threadpool(clean_text, auditor_text)
+            annexure_text = await run_in_threadpool(clean_text, annexure_text)
+            # ==========================================
 
             # ── Step 3: Compliance scan ──────────────────────────────────────────
             try:
