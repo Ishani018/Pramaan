@@ -9,8 +9,6 @@ import io
 
 import pdfplumber
 import fitz  # PyMuPDF
-from PIL import Image, ImageEnhance
-import pytesseract
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +92,6 @@ def extract_text_from_text_pdf(pdf_path: Path, pages_to_extract: List[int] = Non
                     
                     pages.append(PageText(page_number=page_num, text=text, method='direct'))
                 except Exception as e:
-                    # ---> THIS FALLBACK PREVENTS THE CRASH <---
                     try:
                         fallback_text = page.extract_text() or ""
                         pages.append(PageText(page_number=page_num, text=fallback_text, method='direct'))
@@ -134,6 +131,14 @@ def extract_text_from_scanned_pdf(pdf_path: Path, pages_to_extract: List[int] = 
     """Extract text from a scanned PDF using OCR (Tesseract)."""
     pages = []
     try:
+        # Graceful import check
+        from PIL import Image, ImageEnhance
+        import pytesseract
+    except ImportError:
+        logger.error("pytesseract or Pillow is not installed. Cannot process scanned PDF.")
+        return pages, _generate_stats(pages)
+
+    try:
         doc = fitz.open(pdf_path)
         for page_num in range(len(doc)):
             real_page_num = page_num + 1
@@ -141,7 +146,7 @@ def extract_text_from_scanned_pdf(pdf_path: Path, pages_to_extract: List[int] = 
                 continue
             try:
                 page = doc[page_num]
-                pix = page.get_pixmap(dpi=150) # Hardcoded optimal DPI
+                pix = page.get_pixmap(dpi=150) 
                 img_data = pix.tobytes("png")
                 image = Image.open(io.BytesIO(img_data)).convert('L')
                 
