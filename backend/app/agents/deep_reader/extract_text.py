@@ -134,6 +134,9 @@ def extract_text_from_scanned_pdf(pdf_path: Path, pages_to_extract: List[int] = 
         # Graceful import check
         from PIL import Image, ImageEnhance
         import pytesseract
+        
+        # Point to Windows installation
+        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
     except ImportError:
         logger.error("pytesseract or Pillow is not installed. Cannot process scanned PDF.")
         return pages, _generate_stats(pages)
