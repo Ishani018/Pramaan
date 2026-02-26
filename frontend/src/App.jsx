@@ -197,9 +197,9 @@ export default function App() {
                     headers: { 'Content-Type': 'multipart/form-data' },
                     timeout: 180_000,
                 }),
-                axios.get('/api/v1/mock/perfios', { timeout: 5_000 }),
-                axios.get('/api/v1/mock/karza', { timeout: 5_000 }),
-                axios.get('/api/v1/mock/network-graph', { timeout: 5_000 }),
+                axios.get('/api/v1/mock/perfios', { timeout: 180_000 }),
+                axios.get('/api/v1/mock/karza', { timeout: 180_000 }),
+                axios.get('/api/v1/mock/network-graph', { timeout: 180_000 }),
             ])
 
             setPdfResult(pdfResp.data)

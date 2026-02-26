@@ -1,26 +1,44 @@
 import sys
-import asyncio
-from pathlib import Path
-from fastapi import UploadFile
 import io
+from pathlib import Path
+from fastapi.testclient import TestClient
 
 # Add backend to path
 sys.path.append(str(Path(__file__).parent / "backend"))
 
-from app.api.v1.analyze_report import analyze_report
+# Import the main FastAPI app, not just the router function
+from main import app 
 
-async def test():
-    print("Testing backend analysis pipeline directly...")
-    # create a dummy pdf upload file
+client = TestClient(app)
+
+def test():
+    print("Testing backend analysis pipeline via TestClient...")
+    
+    # Create a dummy PDF upload file
     pdf_content = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
-    file = UploadFile(filename="test.pdf", file=io.BytesIO(pdf_content))
+    
+    # Format it as a multipart/form-data payload. 
+    # Note the key "file_fy24" to match your frontend/backend logic.
+    files = {
+        "file_fy24": ("test.pdf", io.BytesIO(pdf_content), "application/pdf")
+    }
+    
     try:
-        res = await analyze_report([file])
-        print("Success!")
+        # Use the test client to POST to the endpoint
+        response = client.post("/api/v1/analyze-report", files=files)
+        
+        print(f"Status Code: {response.status_code}")
+        if response.status_code == 200:
+            print("Success!")
+            print(response.json())
+        else:
+            print(f"Failed: {response.text}")
+            
     except Exception as e:
         import traceback
-        print("Encountered 500 equivalent error:")
+        print("Encountered an exception:")
         traceback.print_exc()
 
 if __name__ == "__main__":
-    asyncio.run(test())
+    # TestClient is synchronous, so we don't need asyncio.run()
+    test()

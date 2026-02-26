@@ -22,6 +22,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Request
 from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
 
 from app.agents.deep_reader.section_boundary_detector import SectionBoundaryDetector
 from app.agents.deep_reader.compliance_scanner import ComplianceScanner
@@ -121,8 +122,8 @@ async def analyze_report(request: Request):
             annexure_cfg = next(c for c in SECTION_CONFIGS if c["id"] == "auditors_annexure")
 
             # Try to detect early termination in section detector
-            auditor_boundary  = detector.detect_section(auditor_cfg, max_pages=MAX_PAGES)
-            annexure_boundary = detector.detect_section(annexure_cfg, max_pages=MAX_PAGES)
+            auditor_boundary  = await run_in_threadpool(detector.detect_section, auditor_cfg, max_pages=MAX_PAGES)
+            annexure_boundary = await run_in_threadpool(detector.detect_section, annexure_cfg, max_pages=MAX_PAGES)
             logger.info(f"[{elapsed()}] SectionBoundaryDetector done")
 
             if auditor_boundary is None and annexure_boundary is None:
@@ -145,7 +146,7 @@ async def analyze_report(request: Request):
             if annexure_boundary:
                 target_pages.update(range(annexure_boundary.start_page, annexure_boundary.end_page + 1))
                 
-            pages_data, extraction_stats = extract_text(tmp_path, pdf_type, pages_to_extract=list(target_pages))
+            pages_data, extraction_stats = await run_in_threadpool(extract_text, tmp_path, pdf_type, pages_to_extract=list(target_pages))
             
             auditor_pages = [p for p in pages_data if auditor_boundary and auditor_boundary.start_page <= p.page_number <= auditor_boundary.end_page]
             annexure_pages = [p for p in pages_data if annexure_boundary and annexure_boundary.start_page <= p.page_number <= annexure_boundary.end_page]
@@ -169,7 +170,8 @@ async def analyze_report(request: Request):
             # ── Step 3: Compliance scan ──────────────────────────────────────────
             try:
                 scanner = ComplianceScanner()
-                scan_result = scanner.scan(
+                scan_result = await run_in_threadpool(
+                    scanner.scan,
                     auditor_text=auditor_text,
                     annexure_text=annexure_text,
                 )
@@ -192,11 +194,11 @@ async def analyze_report(request: Request):
                 # User optimization 2: Only run extraction on the first 150 pages maximum.
                 # Since the financials may be located earlier in the document than the auditor report,
                 # we extract the first 150 pages explicitly for the extractor.
-                fin_pages_data, _ = extract_text(tmp_path, pdf_type, pages_to_extract=list(range(1, 151)))
+                fin_pages_data, _ = await run_in_threadpool(extract_text, tmp_path, pdf_type, pages_to_extract=list(range(1, 151)))
                 fin_text = get_full_text(fin_pages_data)
                 
                 extractor = FinancialExtractor()
-                extracted_figures = extractor.extract(text=fin_text, year=year)
+                extracted_figures = await run_in_threadpool(extractor.extract, text=fin_text, year=year)
             except Exception as e:
                 logger.exception(f"FinancialExtractor failed for {year}: {e}")
                 extracted_figures = {}
@@ -235,7 +237,7 @@ async def analyze_report(request: Request):
     try:
         scans_for_restatement = { y: data.get("extracted_figures", {}) for y, data in per_year_scans.items() if data.get("status", "") == "success" }
         restatement_detector = RestatementDetector()
-        restatement_data = restatement_detector.compare(scans=scans_for_restatement)
+        restatement_data = await run_in_threadpool(restatement_detector.compare, scans=scans_for_restatement)
     except Exception as e:
         logger.exception(f"RestatementDetector failed: {e}")
         restatement_data = {
