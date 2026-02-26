@@ -21,8 +21,8 @@ export default function RestatementAnalysis({ restatementData, pdfResult }) {
         <div className="flex flex-col gap-6 h-full pb-10">
             {/* ── Banner ───────────────────────────────────────────────────────── */}
             <div className={`flex items-center gap-3 p-4 rounded-xl border ${restatements_detected
-                    ? 'bg-danger/10 border-danger/30 text-danger'
-                    : 'bg-success/10 border-success/30 text-success'
+                ? 'bg-danger/10 border-danger/30 text-danger'
+                : 'bg-success/10 border-success/30 text-success'
                 }`}>
                 {restatements_detected ? (
                     <AlertTriangle size={24} className="flex-shrink-0 animate-pulse" />
@@ -60,8 +60,7 @@ export default function RestatementAnalysis({ restatementData, pdfResult }) {
                         const isChanged = idx > 0 && auditor !== arr[idx - 1][1];
                         return (
                             <React.Fragment key={year}>
-                                <div className={`flex flex-col gap-1 p-3 rounded-lg border min-w-[140px] flex-shrink-0 ${isChanged ? 'bg-accent/10 border-accent/30' : 'bg-surface/50 border-border'
-                                    }`}>
+                                <div className={`flex flex-col gap-1 p-3 rounded-lg border min-w-[140px] flex-shrink-0 ${isChanged ? 'bg-accent/10 border-accent/30' : 'bg-surface/50 border-border'}`}>
                                     <span className="text-xs font-mono text-muted">{year}</span>
                                     <span className={`text-sm truncate font-medium ${isChanged ? 'text-accent' : 'text-text'}`} title={auditor}>
                                         {auditor}
@@ -108,8 +107,8 @@ export default function RestatementAnalysis({ restatementData, pdfResult }) {
                                         </td>
                                         <td className="px-4 py-3 text-center">
                                             <span className={`badge text-xs px-2 py-0.5 ${r.severity === 'CRITICAL'
-                                                    ? 'bg-danger/20 text-danger border border-danger/30'
-                                                    : 'bg-accent/20 text-accent border border-accent/30'
+                                                ? 'bg-danger/20 text-danger border border-danger/30'
+                                                : 'bg-accent/20 text-accent border border-accent/30'
                                                 }`}>
                                                 {r.severity}
                                             </span>
