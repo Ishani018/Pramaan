@@ -94,10 +94,11 @@ def extract_text_from_text_pdf(pdf_path: Path, pages_to_extract: List[int] = Non
                     
                     pages.append(PageText(page_number=page_num, text=text, method='direct'))
                 except Exception as e:
+                    # ---> THIS FALLBACK PREVENTS THE CRASH <---
                     try:
                         fallback_text = page.extract_text() or ""
                         pages.append(PageText(page_number=page_num, text=fallback_text, method='direct'))
-                    except:
+                    except Exception:
                         pages.append(PageText(page_number=page_num, text="", method='direct'))
                     
     except Exception as e:
