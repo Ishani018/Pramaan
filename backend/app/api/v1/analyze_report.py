@@ -255,7 +255,12 @@ async def analyze_report(request: Request):
     logger.info(f"[{elapsed()}] RestatementDetector done")
 
     if latest_year not in per_year_scans or per_year_scans[latest_year].get("status") == "error":
-        raise HTTPException(status_code=422, detail="Failed to parse the most recent primary report.")
+        real_error_msg = per_year_scans.get(latest_year, {}).get("message", "Unknown error")
+        logger.error(f"PIPELINE ABORTED. Reason: {real_error_msg}")
+        raise HTTPException(
+            status_code=422, 
+            detail=f"Failed to parse report. Reason: {real_error_msg}"
+        )
 
     # Top-level response uses the most recent year's data to avoid breaking existing frontend logic
     latest_scan = per_year_scans[latest_year]

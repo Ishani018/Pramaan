@@ -160,6 +160,16 @@ class SectionBoundaryDetector:
                     break
                     
         if not candidates:
+            if section_config.get("id") == "auditors_report":
+                for block in self.text_blocks:
+                    if "independent auditor" in block.normalized_text:
+                        end_page = self._find_section_end(block.page_number, end_keywords)
+                        return SectionBoundary(
+                            start_page=block.page_number,
+                            end_page=end_page,
+                            confidence=0.5,
+                            start_heading=block.text
+                        )
             return None
             
         best_block, best_confidence, _ = max(candidates, key=lambda x: x[1])
@@ -174,13 +184,12 @@ class SectionBoundaryDetector:
 
     def _is_potential_heading(self, block: TextBlock) -> bool:
         if block.line_length > 150: return False # Headings aren't paragraphs
-        if block.y_position > 400: return False  # Usually in the top half of page
         
         page_blocks = [b for b in self.text_blocks if b.page_number == block.page_number]
         if page_blocks:
             page_fonts = [b.font_size for b in page_blocks]
             median_font = sorted(page_fonts)[len(page_fonts) // 2]
-            if block.font_size < median_font * 1.05: # Must be slightly larger than body text
+            if block.font_size < median_font * 0.95: # More permissive font check
                 return False
         return True
 
