@@ -81,10 +81,11 @@ class SectionBoundaryDetector:
         self.pdf_path = pdf_path
         self.text_blocks: List[TextBlock] = []
         
-    def extract_layout_metadata(self, max_pages: int = 200) -> List[TextBlock]:
+    def extract_layout_metadata(self, max_pages: int = 150) -> List[TextBlock]:
         """Extract text blocks with layout metadata from PDF using PyMuPDF (fitz)."""
         logger.info(f"Extracting layout metadata from {self.pdf_path.name}")
         blocks = []
+        found_sections = set()
         
         try:
             doc = fitz.open(self.pdf_path)
@@ -121,13 +122,45 @@ class SectionBoundaryDetector:
                                 bbox=(min_x0, min_y0, max_x1, max_y1)
                             )
                             blocks.append(block)
+                            
+                            idx_text = block.normalized_text
+                            if "independent auditor" in idx_text:
+                                found_sections.add("auditor_report")
+                            if "annexure to the independent auditor" in idx_text or "annexure to independent auditor" in idx_text:
+                                found_sections.add("auditor_annexure")
+                
+                if len(found_sections) >= 2:
+                    logger.info(f"Both sections found at page {real_page_num}, stopping early")
+                    break
+                    
+                if real_page_num >= 150:
+                    logger.info(f"Hard stop reached at page {real_page_num}")
+                    break
+                    
             doc.close()
             
         except Exception as e:
             logger.error(f"Error extracting layout metadata: {e}", exc_info=True)
             
         self.text_blocks = blocks
+        self._page_font_cache = self._build_page_font_cache()
         return blocks
+    
+    def _build_page_font_cache(self) -> dict:
+        """Pre-compute median font size per page — call once after 
+        extract_layout_metadata completes."""
+        page_fonts = {}
+        from collections import defaultdict
+        font_lists = defaultdict(list)
+        
+        for block in self.text_blocks:
+            font_lists[block.page_number].append(block.font_size)
+        
+        for page_num, fonts in font_lists.items():
+            sorted_fonts = sorted(fonts)
+            page_fonts[page_num] = sorted_fonts[len(sorted_fonts) // 2]
+        
+        return page_fonts
 
     def detect_section(self, section_config: dict, max_pages: int = 200) -> Optional[SectionBoundary]:
         """Find boundary for a specific section configuration."""
@@ -173,14 +206,14 @@ class SectionBoundaryDetector:
         )
 
     def _is_potential_heading(self, block: TextBlock) -> bool:
-        if block.line_length > 150: return False # Headings aren't paragraphs
+        if block.line_length > 150:
+            return False
+            
+        # Use O(1) lookups instead of O(N^2) list comprehension
+        median_font = getattr(self, '_page_font_cache', {}).get(block.page_number, 10)
         
-        page_blocks = [b for b in self.text_blocks if b.page_number == block.page_number]
-        if page_blocks:
-            page_fonts = [b.font_size for b in page_blocks]
-            median_font = sorted(page_fonts)[len(page_fonts) // 2]
-            if block.font_size < median_font * 0.95: # More permissive font check
-                return False
+        if block.font_size < median_font * 0.95: # More permissive font check
+            return False
         return True
 
     def _calculate_confidence(self, block: TextBlock, keyword: str, normalized_text: str) -> float:
