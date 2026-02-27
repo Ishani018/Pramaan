@@ -1,13 +1,13 @@
 """
 Section boundary detector - analyzes PDF layout to identify Auditor Report boundaries.
-Optimized for performance using PyMuPDF (fitz).
+Adapted from BRSR layout-aware extraction logic.
 """
 import logging
 import re
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-import fitz # PyMuPDF
+import fitz
 
 logger = logging.getLogger(__name__)
 
@@ -82,43 +82,53 @@ class SectionBoundaryDetector:
         self.text_blocks: List[TextBlock] = []
         
     def extract_layout_metadata(self, max_pages: int = 200) -> List[TextBlock]:
+        """Extract text blocks with layout metadata from PDF using PyMuPDF (fitz)."""
         logger.info(f"Extracting layout metadata from {self.pdf_path.name}")
         blocks = []
+        
         try:
-            doc = fitz.open(str(self.pdf_path))
+            doc = fitz.open(self.pdf_path)
             pages_to_scan = min(len(doc), max_pages)
             
             for page_num in range(pages_to_scan):
+                real_page_num = page_num + 1
                 page = doc[page_num]
-                blocks_dict = page.get_text("dict")
+                page_dict = page.get_text("dict")
                 
-                for block in blocks_dict.get("blocks", []):
-                    if block.get("type") != 0:
-                        continue
-                    for line in block.get("lines", []):
-                        spans = line.get("spans", [])
-                        if not spans:
-                            continue
-                        text = " ".join(s["text"] for s in spans).strip()
-                        if not text:
-                            continue
-                        font_size = max(s.get("size", 10) for s in spans)
-                        bbox = line.get("bbox", (0, 0, 0, 0))
-                        blocks.append(TextBlock(
-                            text=text,
-                            page_number=page_num + 1,
-                            font_size=font_size,
-                            y_position=bbox[1],
-                            x_position=bbox[0],
-                            bbox=bbox
-                        ))
+                for b in page_dict.get("blocks", []):
+                    if b.get("type") == 0:  # Text block
+                        for line in b.get("lines", []):
+                            spans = [s for s in line.get("spans", []) if s.get("text", "").strip()]
+                            if not spans:
+                                continue
+                                
+                            combined_text = "".join(s.get("text", "") for s in line.get("spans", [])).strip()
+                            if not combined_text:
+                                continue
+                            
+                            min_x0 = min(s.get("bbox")[0] for s in spans)
+                            min_y0 = min(s.get("bbox")[1] for s in spans)
+                            max_x1 = max(s.get("bbox")[2] for s in spans)
+                            max_y1 = max(s.get("bbox")[3] for s in spans)
+                            max_font_size = max(s.get("size", 10) for s in spans)
+                            
+                            block = TextBlock(
+                                text=combined_text,
+                                page_number=real_page_num,
+                                font_size=max_font_size,
+                                y_position=min_y0,
+                                x_position=min_x0,
+                                bbox=(min_x0, min_y0, max_x1, max_y1)
+                            )
+                            blocks.append(block)
             doc.close()
+            
         except Exception as e:
             logger.error(f"Error extracting layout metadata: {e}", exc_info=True)
-        
+            
         self.text_blocks = blocks
         return blocks
-    
+
     def detect_section(self, section_config: dict, max_pages: int = 200) -> Optional[SectionBoundary]:
         """Find boundary for a specific section configuration."""
         if not self.text_blocks:
@@ -140,7 +150,6 @@ class SectionBoundaryDetector:
                     break
                     
         if not candidates:
-            # Fallback: Plain keyword search without heading constraints
             if section_config.get("id") == "auditors_report":
                 for block in self.text_blocks:
                     if "independent auditor" in block.normalized_text:
@@ -166,12 +175,11 @@ class SectionBoundaryDetector:
     def _is_potential_heading(self, block: TextBlock) -> bool:
         if block.line_length > 150: return False # Headings aren't paragraphs
         
-        # Heading heuristic: Font size should be larger than or equal to median font
         page_blocks = [b for b in self.text_blocks if b.page_number == block.page_number]
         if page_blocks:
             page_fonts = [b.font_size for b in page_blocks]
             median_font = sorted(page_fonts)[len(page_fonts) // 2]
-            if block.font_size < median_font * 0.95: 
+            if block.font_size < median_font * 0.95: # More permissive font check
                 return False
         return True
 
@@ -181,18 +189,17 @@ class SectionBoundaryDetector:
         elif normalized_text.startswith(keyword) or normalized_text.endswith(keyword): confidence += 0.2
         else: confidence += 0.1
         
-        # Position heuristic: Headings usually appear in the top half
-        if block.y_position < 350: confidence += 0.1
+        if block.y_position < 150: confidence += 0.1
         if block.line_length < 50: confidence += 0.05
         return min(confidence, 1.0)
 
     def _find_section_end(self, start_page: int, end_keywords: List[str]) -> int:
-        # Scan subsequent blocks to find the next major heading
         subsequent_blocks = [b for b in self.text_blocks if b.page_number > start_page]
         for block in subsequent_blocks:
             normalized = block.normalized_text
             for end_keyword in end_keywords:
                 if end_keyword in normalized and self._is_potential_heading(block):
+                    # We found the next section heading, meaning current section ended
                     return block.page_number - 1 
                     
-        return start_page + 10 # Safety fallback limit
+        return start_page + 10 # Fallback safety limit if no end found
