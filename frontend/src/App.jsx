@@ -19,6 +19,7 @@ import PDFViewer from './components/PDFViewer'
 import WaterfallChart from './components/WaterfallChart'
 import ComplianceHeatmap from './components/HallucinationHeatmap'
 import CompliancePanel from './components/CompliancePanel'
+import AdverseMediaPanel from './components/AdverseMediaPanel'
 import NetworkAnalysis from './components/NetworkAnalysis'
 import RestatementAnalysis from './components/RestatementAnalysis'
 
@@ -430,7 +431,10 @@ export default function App() {
                     {/* Tab content */}
                     <div className="flex-1 overflow-y-auto p-5">
                         {activeTab === 'compliance' && (
-                            <CompliancePanel result={pdfResult} loading={loading} />
+                            <div className="flex flex-col gap-6">
+                                <CompliancePanel result={pdfResult} loading={loading} />
+                                <AdverseMediaPanel newsData={pdfResult?.news_data} />
+                            </div>
                         )}
                         {activeTab === 'waterfall' && (
                             <div className="flex flex-col gap-6 h-full pb-10">
