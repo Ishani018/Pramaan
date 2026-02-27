@@ -143,24 +143,7 @@ class SectionBoundaryDetector:
             logger.error(f"Error extracting layout metadata: {e}", exc_info=True)
             
         self.text_blocks = blocks
-        self._page_font_cache = self._build_page_font_cache()
         return blocks
-    
-    def _build_page_font_cache(self) -> dict:
-        """Pre-compute median font size per page — call once after 
-        extract_layout_metadata completes."""
-        page_fonts = {}
-        from collections import defaultdict
-        font_lists = defaultdict(list)
-        
-        for block in self.text_blocks:
-            font_lists[block.page_number].append(block.font_size)
-        
-        for page_num, fonts in font_lists.items():
-            sorted_fonts = sorted(fonts)
-            page_fonts[page_num] = sorted_fonts[len(sorted_fonts) // 2]
-        
-        return page_fonts
 
     def detect_section(self, section_config: dict, max_pages: int = 200) -> Optional[SectionBoundary]:
         """Find boundary for a specific section configuration."""
@@ -206,11 +189,22 @@ class SectionBoundaryDetector:
         )
 
     def _is_potential_heading(self, block: TextBlock) -> bool:
-        if block.line_length > 150:
-            return False
+        if block.line_length > 150: return False # Headings aren't paragraphs
+        
+        # O(1) lookup: Cache median fonts per page to avoid O(N^2) list iteration
+        if not hasattr(self, '_page_median_fonts'):
+            self._page_median_fonts = {}
+            page_fonts_temp = {}
             
-        # Use O(1) lookups instead of O(N^2) list comprehension
-        median_font = getattr(self, '_page_font_cache', {}).get(block.page_number, 10)
+            # Group fonts by page once
+            for b in self.text_blocks:
+                page_fonts_temp.setdefault(b.page_number, []).append(b.font_size)
+                
+            # Calculate the median for each page
+            for page_num, fonts in page_fonts_temp.items():
+                self._page_median_fonts[page_num] = sorted(fonts)[len(fonts) // 2] if fonts else 10
+                
+        median_font = self._page_median_fonts.get(block.page_number, 10)
         
         if block.font_size < median_font * 0.95: # More permissive font check
             return False
