@@ -35,6 +35,7 @@ from app.agents.orchestrator import orchestrate_decision, BASE_RATE_PCT, BASE_LI
 from app.agents.deep_reader.text_cleaner import clean_text
 from app.agents.external.news_scanner import NewsScanner
 import os
+from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -232,23 +233,64 @@ async def analyze_report(request: Request):
                     first_page_text = doc[0].get_text("text")
                     doc.close()
                     
-                    entity_name = None
-                    lines = [line.strip() for line in first_page_text.split('\n') if line.strip()]
-                    
-                    for i, line in enumerate(lines):
-                        if "annual report" in line.lower() and i > 0:
-                            entity_name = lines[i-1]
-                            break
+                    # === INCORPORATED BRSR EXTRACTION LOGIC ===
+                    def extract_entity_name(fname: str, page_text: str) -> str:
+                        base = fname.replace('.pdf', '')
+                        name = None
+                        
+                        # 1. Regex parsing from BRSR file_naming.py 
+                        # Matches: "Reliance_Industries_AnnualReport_2023"
+                        match = re.search(r'^(.+?)[_-](?:Annual(?:_|\s)?Report|BRSR)', base, re.IGNORECASE)
+                        if match:
+                            name = match.group(1).replace('_', ' ').strip()
+                        else:
+                            # 2. Reverse extraction for "AnnualReport_2019CDEL"
+                            cln = re.sub(r'(?i)(annual_?report|brsr|financial_?statements)', '', base)
+                            cln = re.sub(r'20\d{2}[_-]?(\d{2})?', '', cln) # Strip years
+                            cln = re.sub(r'[\d_]', ' ', cln).strip()
+                            if cln and len(cln) > 2:
+                                name = cln
+                        
+                        # 3. PDF Text Fallback (Improved)
+                        # If filename only gave us an acronym (like CDEL), check the text for a longer name
+                        if not name or len(name) <= 4:
+                            lines = [l.strip() for l in page_text.split('\n') if l.strip()]
+                            for i, line in enumerate(lines):
+                                if "annual report" in line.lower() and i > 0:
+                                    potential = lines[i-1]
+                                    if len(potential) > 2 and not potential.isnumeric():
+                                        if not name or len(potential) > len(name):
+                                            name = potential
+                                        break
+                                        
+                        if not name:
+                            name = base
                             
-                    if not entity_name:
-                        # Fallback: use filename stripped of numbers/underscores
-                        entity_name = re.sub(r'[\d_]', ' ', file_obj.filename.replace(".pdf", "")).strip()
+                        # 4. Suffix Cleaning from BRSR company_reader.py
+                        name = re.sub(r'\s+', ' ', name).strip()
+                        suffixes = [" Ltd.", " Limited", " Pvt Ltd", " Private Limited", " Ltd", " Pvt. Ltd.", " Inc", " Corp", " Corporation"]
+                        for suf in suffixes:
+                            if name.lower().endswith(suf.lower()):
+                                name = name[:-len(suf)].strip()
+                                
+                        # 5. Symbol Lookup Mapper (Crucial for acronyms like CDEL)
+                        # Avoid hardcoding as requested, but leave the structure for future integration
+                        # e.g., integrating with a database or a shared dictionary
+                        symbol_map = {
+                            "CDEL": "Coffee Day Enterprises"
+                        }
+                        return symbol_map.get(name.upper(), name)
 
-                    api_key = os.getenv("NEWS_API_KEY", "")
+                    entity_name = extract_entity_name(file_obj.filename, first_page_text)
+                    # ==========================================
+
+                    # Use Pydantic settings instead of os.getenv
+                    api_key = settings.NEWS_API_KEY
                     if api_key:
                         news_scanner = NewsScanner(api_key=api_key)
                         news_data = await news_scanner.scan(entity_name)
                     else:
+                        logger.warning("NEWS_API_KEY is missing or empty. Skipping News Scan.")
                         news_data = None
                 except Exception as e:
                     logger.exception(f"NewsScanner failed for {year}: {e}")

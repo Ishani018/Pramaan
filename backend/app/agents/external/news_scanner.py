@@ -1,5 +1,6 @@
 import logging
 import requests
+from fastapi.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +15,17 @@ class NewsScanner:
         # Search for entity name + red flag keywords
         query = f'"{entity_name}" AND (fraud OR default OR insolvency OR "ED raid" OR NCLT OR "cheque bounce" OR RBI OR SEBI)'
         
-        response = requests.get(self.base_url, params={
-            "q": query,
-            "apiKey": self.api_key,
-            "language": "en",
-            "sortBy": "publishedAt",
-            "pageSize": 10
-        })
+        response = await run_in_threadpool(
+            requests.get,
+            self.base_url, 
+            params={
+                "q": query,
+                "apiKey": self.api_key,
+                "language": "en",
+                "sortBy": "publishedAt",
+                "pageSize": 10
+            }
+        )
         
         articles = response.json().get("articles", [])
         
