@@ -80,7 +80,7 @@ export default function RestatementAnalysis({ restatementData, pdfResult }) {
                 <div className="glass p-5 rounded-xl border border-border">
                     <h3 className="font-semibold text-text flex items-center gap-2 text-sm mb-4">
                         <TrendingDown size={16} className="text-danger" />
-                        Flagged Variances (>2%)
+                        Flagged Variances (&gt;2%)
                     </h3>
 
                     <div className="overflow-x-auto">

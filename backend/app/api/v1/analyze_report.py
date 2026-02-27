@@ -33,10 +33,13 @@ from app.agents.deep_reader.extract_text import extract_text, get_full_text, ext
 from app.agents.restatement_detector import RestatementDetector
 from app.agents.orchestrator import orchestrate_decision, BASE_RATE_PCT, BASE_LIMIT_CR
 from app.agents.deep_reader.text_cleaner import clean_text
-
+from app.agents.external.news_scanner import NewsScanner
+import os
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+import fitz
 
 MAX_PAGES = 200
 
@@ -220,6 +223,38 @@ async def analyze_report(request: Request):
                     extracted_figures = {}
                 logger.info(f"[{elapsed()}] FinancialExtractor done")
 
+                # ── Step 4.5: News Scan ──────────────────────────────────────────────
+                try:
+                    import fitz
+                    import re
+                    
+                    doc = fitz.open(str(tmp_path))
+                    first_page_text = doc[0].get_text("text")
+                    doc.close()
+                    
+                    entity_name = None
+                    lines = [line.strip() for line in first_page_text.split('\n') if line.strip()]
+                    
+                    for i, line in enumerate(lines):
+                        if "annual report" in line.lower() and i > 0:
+                            entity_name = lines[i-1]
+                            break
+                            
+                    if not entity_name:
+                        # Fallback: use filename stripped of numbers/underscores
+                        entity_name = re.sub(r'[\d_]', ' ', file_obj.filename.replace(".pdf", "")).strip()
+
+                    api_key = os.getenv("NEWS_API_KEY", "")
+                    if api_key:
+                        news_scanner = NewsScanner(api_key=api_key)
+                        news_data = await news_scanner.scan(entity_name)
+                    else:
+                        news_data = None
+                except Exception as e:
+                    logger.exception(f"NewsScanner failed for {year}: {e}")
+                    news_data = None
+                logger.info(f"[{elapsed()}] NewsScanner done")
+
                 # ── Store per-year result ────────────────────────────────────────────
                 per_year_scans[year] = {
                     "status": "success",
@@ -238,6 +273,7 @@ async def analyze_report(request: Request):
                     "auditor_qualification_findings":  scan_dict.get("auditor_qualification_findings", []),
                     "emphasis_findings":         scan_dict.get("emphasis_findings", []),
                     "extracted_figures":         extracted_figures,
+                    "news_data":                 news_data,
                 }
             
             except Exception as exc:
@@ -281,7 +317,7 @@ async def analyze_report(request: Request):
                 content={
                     **latest_scan,
                     "message": "Neither the Independent Auditor's Report nor its Annexure could be located.",
-                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data),
+                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=latest_scan.get("news_data")),
                     "per_year_scans": per_year_scans,
                     "restatement_data": restatement_data,
                 }
@@ -292,6 +328,7 @@ async def analyze_report(request: Request):
             perfios_data=None,      
             karza_data=None,        
             restatement_data=restatement_data,
+            news_data=latest_scan.get("news_data")
         )
         logger.info(f"[{elapsed()}] Orchestrator done")
 

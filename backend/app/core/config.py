@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     # Temporary storage for uploaded PDFs during analysis
     UPLOAD_DIR: Path = Path("tmp/uploads")
 
+    NEWS_API_KEY: str | None = None
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

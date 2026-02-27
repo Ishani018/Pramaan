@@ -59,6 +59,13 @@ RULE_DEFINITIONS = {
         "requires_manual_review": True,
         "severity": "HIGH",
     },
+    "P-13": {
+        "name": "Adverse Media Detected",
+        "trigger_description": "NewsScanner found high-severity red flags (fraud, ED raid, etc.)",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 0,
+        "requires_manual_review": True,
+    },
 }
 
 
@@ -67,6 +74,7 @@ def orchestrate_decision(
     perfios_data: Dict[str, Any] | None,
     karza_data: Dict[str, Any] | None,
     restatement_data: Dict[str, Any] | None = None,
+    news_data: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Aggregate all signals and compute the final credit decision.
@@ -76,6 +84,7 @@ def orchestrate_decision(
         perfios_data:    Response from GET /mock/perfios
         karza_data:      Response from GET /mock/karza
         restatement_data: Response from RestatementDetector (P-09, P-10)
+        news_data:       Response from NewsScanner (P-13)
 
     Returns:
         Unified decision dict:
@@ -105,7 +114,6 @@ def orchestrate_decision(
             if "P-04" not in triggered:
                 triggered.append("P-04")
 
-    # ── P-09 & P-10: Restatements and Auditor Rotation ───────────────────────
     if restatement_data:
         if restatement_data.get("restatements_detected"):
             if "P-09" not in triggered:
@@ -113,6 +121,11 @@ def orchestrate_decision(
         if restatement_data.get("auditor_changed"):
             if "P-10" not in triggered:
                 triggered.append("P-10")
+
+    # ── P-13: Adverse Media Detected ─────────────────────────────────────────
+    if news_data and news_data.get("adverse_media_detected"):
+        if "P-13" not in triggered:
+            triggered.append("P-13")
 
     # ── Apply penalties ───────────────────────────────────────────────────────
     rate  = BASE_RATE_PCT
@@ -170,6 +183,7 @@ def generate_decision_narrative(
     pdf_scan: Dict[str, Any] | None = None,
     perfios_data: Dict[str, Any] | None = None,
     restatement_data: Dict[str, Any] | None = None,
+    news_data: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Produce a plain-English, step-by-step narrative explaining the credit
@@ -214,7 +228,7 @@ def generate_decision_narrative(
         cut_pct = rule["limit_reduction_pct"]
 
         # Build a specific "what was found" string
-        finding = _describe_finding(rule_id, pdf_scan, perfios_data, restatement_data)
+        finding = _describe_finding(rule_id, pdf_scan, perfios_data, restatement_data, news_data)
 
         # Apply penalty
         running_rate += bps / 100
@@ -254,6 +268,7 @@ def _describe_finding(
     pdf_scan: Dict[str, Any] | None,
     perfios_data: Dict[str, Any] | None,
     restatement_data: Dict[str, Any] | None = None,
+    news_data: Dict[str, Any] | None = None,
 ) -> str:
     """Return a human-readable description of what triggered a specific rule."""
 
@@ -285,6 +300,12 @@ def _describe_finding(
 
     if rule_id == "P-02":
         return "related-party outflows to director-connected entities flagged"
+
+    if rule_id == "P-13" and news_data:
+        flags = [rf["headline"] for rf in news_data.get("red_flags", []) if rf.get("severity") == "HIGH"]
+        if flags:
+            return f"adverse media detected: {flags[0]}"
+        return "adverse media detected based on company name search"
 
     # Fallback: use the trigger_description from RULE_DEFINITIONS
     rule = RULE_DEFINITIONS.get(rule_id)

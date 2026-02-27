@@ -35,6 +35,7 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
     if (networkData?.circular_trading_detected) triggered.push('P-06')
     if (restatementData?.restatements_detected) triggered.push('P-09')
     if (restatementData?.auditor_changed) triggered.push('P-10')
+    if (pdfScan?.news_data?.adverse_media_detected) triggered.push('P-13')
 
     const RULES = {
         'P-01': { name: 'Ghost Input Trap', bps: 100, cut: 10, manual: false, trigger: 'GSTR-2A vs 3B mismatch > 15% (Perfios)' },
@@ -43,6 +44,7 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
         'P-06': { name: 'Circular Fraud Detected', bps: 0, cut: 50, manual: false, trigger: 'Circular trading loop detected via network graph (Acme → Vertex → Nova → Acme)' },
         'P-09': { name: 'Financial Restatement', bps: 200, cut: 40, manual: true, trigger: 'Prior year financial comparative figures restated by >2%' },
         'P-10': { name: 'Auditor Rotation / Change', bps: 75, cut: 10, manual: true, trigger: 'Change in statutory auditor detected across reporting periods' },
+        'P-13': { name: 'Adverse Media Detected', bps: 50, cut: 0, manual: true, trigger: 'NewsScanner found high-severity red flags (fraud, ED raid, etc.)' },
     }
 
     let rate = BASE_RATE
@@ -85,6 +87,7 @@ const ALL_RULES = [
     { id: 'P-06', label: 'Circ. Fraud' },
     { id: 'P-09', label: 'Restatement', severity: 'CRITICAL' },
     { id: 'P-10', label: 'Auditor Change', severity: 'HIGH' },
+    { id: 'P-13', label: 'Adverse Media', severity: 'HIGH' },
 ]
 
 function StatusBadge({ status, message }) {
