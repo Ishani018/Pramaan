@@ -1,13 +1,13 @@
 """
 Section boundary detector - analyzes PDF layout to identify Auditor Report boundaries.
-Adapted from BRSR layout-aware extraction logic.
+Optimized for performance using PyMuPDF (fitz).
 """
 import logging
 import re
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-import pdfplumber
+import fitz # PyMuPDF
 
 logger = logging.getLogger(__name__)
 
@@ -82,63 +82,43 @@ class SectionBoundaryDetector:
         self.text_blocks: List[TextBlock] = []
         
     def extract_layout_metadata(self, max_pages: int = 200) -> List[TextBlock]:
-        """Extract text blocks with layout metadata from PDF."""
         logger.info(f"Extracting layout metadata from {self.pdf_path.name}")
         blocks = []
-        
         try:
-            with pdfplumber.open(self.pdf_path) as pdf:
-                # Only scan up to max_pages to save time
-                pages_to_scan = pdf.pages[:max_pages]
+            doc = fitz.open(str(self.pdf_path))
+            pages_to_scan = min(len(doc), max_pages)
+            
+            for page_num in range(pages_to_scan):
+                page = doc[page_num]
+                blocks_dict = page.get_text("dict")
                 
-                for page_num, page in enumerate(pages_to_scan, start=1):
-                    words = page.extract_words(x_tolerance=3, y_tolerance=3, keep_blank_chars=False)
-                    if not words:
+                for block in blocks_dict.get("blocks", []):
+                    if block.get("type") != 0:
                         continue
-                    
-                    font_sizes = [w.get('height', 10) for w in words]
-                    page_median_font = sorted(font_sizes)[len(font_sizes) // 2] if font_sizes else 10
-                    lines = self._group_words_into_lines(words)
-                    
-                    for line in lines:
-                        text = ' '.join([w['text'] for w in line])
-                        if not text.strip():
+                    for line in block.get("lines", []):
+                        spans = line.get("spans", [])
+                        if not spans:
                             continue
-                        
-                        first_word = line[0]
-                        block = TextBlock(
+                        text = " ".join(s["text"] for s in spans).strip()
+                        if not text:
+                            continue
+                        font_size = max(s.get("size", 10) for s in spans)
+                        bbox = line.get("bbox", (0, 0, 0, 0))
+                        blocks.append(TextBlock(
                             text=text,
-                            page_number=page_num,
-                            font_size=first_word.get('height', page_median_font),
-                            y_position=first_word['top'],
-                            x_position=first_word['x0'],
-                            bbox=(min(w['x0'] for w in line), min(w['top'] for w in line), 
-                                  max(w['x1'] for w in line), max(w['bottom'] for w in line))
-                        )
-                        blocks.append(block)
-                        
+                            page_number=page_num + 1,
+                            font_size=font_size,
+                            y_position=bbox[1],
+                            x_position=bbox[0],
+                            bbox=bbox
+                        ))
+            doc.close()
         except Exception as e:
             logger.error(f"Error extracting layout metadata: {e}", exc_info=True)
-            
+        
         self.text_blocks = blocks
         return blocks
     
-    def _group_words_into_lines(self, words: List[dict]) -> List[List[dict]]:
-        if not words: return []
-        sorted_words = sorted(words, key=lambda w: (w['top'], w['x0']))
-        lines, current_line = [], [sorted_words[0]]
-        current_y = sorted_words[0]['top']
-        
-        for word in sorted_words[1:]:
-            if abs(word['top'] - current_y) <= 3:
-                current_line.append(word)
-            else:
-                lines.append(current_line)
-                current_line = [word]
-                current_y = word['top']
-        if current_line: lines.append(current_line)
-        return lines
-
     def detect_section(self, section_config: dict, max_pages: int = 200) -> Optional[SectionBoundary]:
         """Find boundary for a specific section configuration."""
         if not self.text_blocks:
@@ -160,6 +140,7 @@ class SectionBoundaryDetector:
                     break
                     
         if not candidates:
+            # Fallback: Plain keyword search without heading constraints
             if section_config.get("id") == "auditors_report":
                 for block in self.text_blocks:
                     if "independent auditor" in block.normalized_text:
@@ -185,11 +166,12 @@ class SectionBoundaryDetector:
     def _is_potential_heading(self, block: TextBlock) -> bool:
         if block.line_length > 150: return False # Headings aren't paragraphs
         
+        # Heading heuristic: Font size should be larger than or equal to median font
         page_blocks = [b for b in self.text_blocks if b.page_number == block.page_number]
         if page_blocks:
             page_fonts = [b.font_size for b in page_blocks]
             median_font = sorted(page_fonts)[len(page_fonts) // 2]
-            if block.font_size < median_font * 0.95: # More permissive font check
+            if block.font_size < median_font * 0.95: 
                 return False
         return True
 
@@ -199,17 +181,18 @@ class SectionBoundaryDetector:
         elif normalized_text.startswith(keyword) or normalized_text.endswith(keyword): confidence += 0.2
         else: confidence += 0.1
         
-        if block.y_position < 150: confidence += 0.1
+        # Position heuristic: Headings usually appear in the top half
+        if block.y_position < 350: confidence += 0.1
         if block.line_length < 50: confidence += 0.05
         return min(confidence, 1.0)
 
     def _find_section_end(self, start_page: int, end_keywords: List[str]) -> int:
+        # Scan subsequent blocks to find the next major heading
         subsequent_blocks = [b for b in self.text_blocks if b.page_number > start_page]
         for block in subsequent_blocks:
             normalized = block.normalized_text
             for end_keyword in end_keywords:
                 if end_keyword in normalized and self._is_potential_heading(block):
-                    # We found the next section heading, meaning current section ended
                     return block.page_number - 1 
                     
-        return start_page + 10 # Fallback safety limit if no end found
+        return start_page + 10 # Safety fallback limit
