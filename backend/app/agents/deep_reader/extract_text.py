@@ -26,14 +26,18 @@ def extract_text_with_table_support(page) -> str:
         if not tables:
             return page.extract_text() or ""
         
-        table_boxes = [{'x0': t.bbox[0], 'y0': t.bbox[1], 'x1': t.bbox[2], 'y1': t.bbox[3]} for t in tables]
+        table_bounds = [(t.bbox[0], t.bbox[1], t.bbox[2], t.bbox[3]) for t in tables]
         words = page.extract_words(x_tolerance=3, y_tolerance=3)
         non_table_words = []
         
         for word in words:
             word_center_x = (word['x0'] + word['x1']) / 2
             word_center_y = (word['top'] + word['bottom']) / 2
-            is_in_table = any(b['x0'] <= word_center_x <= b['x1'] and b['y0'] <= word_center_y <= b['y1'] for b in table_boxes)
+            
+            is_in_table = any(
+                x0 <= word_center_x <= x1 and y0 <= word_center_y <= y1 
+                for x0, y0, x1, y1 in table_bounds
+            )
             if not is_in_table:
                 non_table_words.append(word)
         
@@ -92,14 +96,17 @@ def extract_text_from_text_pdf(pdf_path: Path, pages_to_extract: List[int] = Non
                     
                     pages.append(PageText(page_number=page_num, text=text, method='direct'))
                 except Exception as e:
+                    logger.warning(f"pdfplumber failed on page {page_num}: {e}")
+                    import fitz
                     try:
-                        fallback_text = page.extract_text() or ""
-                        pages.append(PageText(page_number=page_num, text=fallback_text, method='direct'))
+                        with fitz.open(pdf_path) as doc:
+                            fallback_text = doc[i].get_text("text", sort=True)
+                            pages.append(PageText(page_number=page_num, text=fallback_text, method='direct-fallback'))
                     except Exception:
                         pages.append(PageText(page_number=page_num, text="", method='direct'))
                     
     except Exception as e:
-        logger.error(f"Error opening PDF with pdfplumber: {e}")
+        logger.error(f"Error opening PDF with pdfplumber: {e}. Falling back to PyMuPDF.")
         return extract_text_with_pymupdf(pdf_path, pages_to_extract)
     
     return pages, _generate_stats(pages)
