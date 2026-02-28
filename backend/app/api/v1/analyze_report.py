@@ -320,7 +320,13 @@ async def analyze_report(request: Request):
                     entity_name = extract_entity_name(file_obj.filename, first_page_text)
                     # ==========================================
                     
-                    
+                    # If the extracted name is too generic (like "annual-report") but MCA found the real company name, use the MCA name!
+                    if getattr(mca_data, "company_name", None):
+                        lower_name = entity_name.lower()
+                        if "annual" in lower_name or "report" in lower_name or len(entity_name) < 4:
+                            logger.info(f"Overriding generic entity name '{entity_name}' with MCA name '{mca_data.company_name}'")
+                            entity_name = mca_data.company_name.title()
+
                     # Update the external mocks with the real entity name
                     from app.api.v1.external_mocks import set_entity, EntityUpdate
                     cin_str = mca_data.cin if (mca_data and getattr(mca_data, "cin", "")) else ("L15122KA2008PLC047538" if "coffee" in entity_name.lower() else "U27100MH2010PTC123456")
