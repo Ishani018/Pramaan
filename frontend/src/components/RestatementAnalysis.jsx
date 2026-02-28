@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, AlertTriangle, TrendingDown, AlignLeft, Calendar } from 'lucide-react';
+import { RULE_DISPLAY_NAMES } from '../App';
 
 export default function RestatementAnalysis({ restatementData, pdfResult }) {
     if (!restatementData) {
@@ -9,7 +10,7 @@ export default function RestatementAnalysis({ restatementData, pdfResult }) {
                 <Calendar size={48} className="text-surface border border-border rounded-full p-2 mb-2 bg-void" />
                 <h3 className="text-lg font-semibold text-text">Insufficient History</h3>
                 <p className="max-w-md text-sm">
-                    Upload multiple years (e.g., FY22, FY23, FY24) to enable automated year-over-year comparative analysis and detect silent financial restatements.
+                    Upload reports from multiple years to enable restatement comparison. Currently showing FY24 only.
                 </p>
             </div>
         );
@@ -31,7 +32,7 @@ export default function RestatementAnalysis({ restatementData, pdfResult }) {
                 )}
                 <div>
                     <h2 className="text-sm font-bold uppercase tracking-widest">
-                        {restatements_detected ? 'RESTATEMENT DETECTED [P-09]' : 'CLEAN COMPARATIVES'}
+                        {restatements_detected ? `RESTATEMENT DETECTED [${RULE_DISPLAY_NAMES['P-09'] || 'P-09'}]` : 'CLEAN COMPARATIVES'}
                     </h2>
                     <p className="text-xs mt-1 opacity-90">
                         {restatements_detected
@@ -50,29 +51,35 @@ export default function RestatementAnalysis({ restatementData, pdfResult }) {
                     </h3>
                     {auditor_changed && (
                         <span className="badge bg-accent/20 text-accent font-bold text-xs ring-1 ring-accent/30">
-                            ROTATION FLAG [P-10]
+                            ROTATION FLAG [{RULE_DISPLAY_NAMES['P-10'] || 'P-10'}]
                         </span>
                     )}
                 </div>
 
-                <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                    {Object.entries(auditor_history || {}).sort((a, b) => a[0].localeCompare(b[0])).map(([year, auditor], idx, arr) => {
-                        const isChanged = idx > 0 && auditor !== arr[idx - 1][1];
-                        return (
-                            <React.Fragment key={year}>
-                                <div className={`flex flex-col gap-1 p-3 rounded-lg border min-w-[140px] flex-shrink-0 ${isChanged ? 'bg-accent/10 border-accent/30' : 'bg-surface/50 border-border'}`}>
-                                    <span className="text-xs font-mono text-muted">{year}</span>
-                                    <span className={`text-sm truncate font-medium ${isChanged ? 'text-accent' : 'text-text'}`} title={auditor}>
-                                        {auditor}
-                                    </span>
-                                </div>
-                                {idx < arr.length - 1 && (
-                                    <div className="w-8 h-[2px] bg-border flex-shrink-0" />
-                                )}
-                            </React.Fragment>
-                        );
-                    })}
-                </div>
+                {Object.keys(auditor_history || {}).length <= 1 ? (
+                    <div className="text-sm text-muted italic p-3 bg-surface/30 rounded border border-border/50 text-center">
+                        Upload reports from multiple years to enable restatement comparison. Currently showing FY24 only.
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                        {Object.entries(auditor_history || {}).sort((a, b) => a[0].localeCompare(b[0])).map(([year, auditor], idx, arr) => {
+                            const isChanged = idx > 0 && auditor !== arr[idx - 1][1];
+                            return (
+                                <React.Fragment key={year}>
+                                    <div className={`flex flex-col gap-1 p-3 rounded-lg border min-w-[140px] flex-shrink-0 ${isChanged ? 'bg-accent/10 border-accent/30' : 'bg-surface/50 border-border'}`}>
+                                        <span className="text-xs font-mono text-muted">{year}</span>
+                                        <span className={`text-sm truncate font-medium ${isChanged ? 'text-accent' : 'text-text'}`} title={auditor}>
+                                            {auditor}
+                                        </span>
+                                    </div>
+                                    {idx < arr.length - 1 && (
+                                        <div className="w-8 h-[2px] bg-border flex-shrink-0" />
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
             {/* ── Restatement Table ────────────────────────────────────────────── */}

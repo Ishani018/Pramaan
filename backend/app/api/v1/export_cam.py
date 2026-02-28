@@ -49,6 +49,9 @@ class CamRequest(BaseModel):
     karza:      Optional[Dict[str, Any]] = None
     decision:   Optional[Dict[str, Any]] = None
     restatement_data: Optional[Dict[str, Any]] = None
+    news_data:  Optional[Dict[str, Any]] = None
+    site_visit_scan: Optional[Dict[str, Any]] = None
+    mca_data:   Optional[Dict[str, Any]] = None
     triggered_rules: list[str]           = []
 
     # Capital / Collateral (optional free-text from officer)

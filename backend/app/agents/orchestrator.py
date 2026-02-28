@@ -43,6 +43,14 @@ RULE_DEFINITIONS = {
         "limit_reduction_pct": 0,
         "requires_manual_review": True,
     },
+    "P-07": {
+        "name": "PRIMARY-01: Site Visit Risk",
+        "trigger_description": "Adverse observations from factory visit or management interview",
+        "rate_penalty_bps": 75,
+        "limit_reduction_pct": 10,
+        "requires_manual_review": True,
+        "severity": "HIGH"
+    },
     "P-09": {
         "name": "Financial Restatement",
         "trigger_description": "Prior year financial comparative figures restated by >2%",
@@ -50,6 +58,14 @@ RULE_DEFINITIONS = {
         "limit_reduction_pct": 40,
         "requires_manual_review": True,
         "severity": "CRITICAL",
+    },
+    "P-14": {
+        "name": "CORP-01: Company Not Active",
+        "trigger_description": "MCA21 shows company struck off or under liquidation",
+        "rate_penalty_bps": 0,
+        "limit_reduction_pct": 100,
+        "requires_manual_review": True,
+        "severity": "CRITICAL"
     },
     "P-10": {
         "name": "Auditor Rotation / Change",
@@ -75,6 +91,8 @@ def orchestrate_decision(
     karza_data: Dict[str, Any] | None,
     restatement_data: Dict[str, Any] | None = None,
     news_data: Dict[str, Any] | None = None,
+    site_visit_scan: Dict[str, Any] | None = None,
+    mca_data: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Aggregate all signals and compute the final credit decision.
@@ -85,6 +103,7 @@ def orchestrate_decision(
         karza_data:      Response from GET /mock/karza
         restatement_data: Response from RestatementDetector (P-09, P-10)
         news_data:       Response from NewsScanner (P-13)
+        site_visit_scan: Response from SiteVisitScanner (P-07)
 
     Returns:
         Unified decision dict:
@@ -126,6 +145,18 @@ def orchestrate_decision(
     if news_data and news_data.get("adverse_media_detected"):
         if "P-13" not in triggered:
             triggered.append("P-13")
+
+    # ── P-07: Site Visit Scans ────────────────────────────────────────────────
+    if site_visit_scan and site_visit_scan.get("triggered_rules"):
+        for rule in site_visit_scan["triggered_rules"]:
+            if rule not in triggered:
+                triggered.append(rule)
+
+    # ── P-14: MCA Scanner ─────────────────────────────────────────────────────
+    if mca_data and mca_data.get("triggered_rules"):
+        for rule in mca_data["triggered_rules"]:
+            if rule not in triggered:
+                triggered.append(rule)
 
     # ── Apply penalties ───────────────────────────────────────────────────────
     rate  = BASE_RATE_PCT

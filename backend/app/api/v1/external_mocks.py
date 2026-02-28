@@ -10,8 +10,25 @@ These are deterministic mock fixtures. In production they would call the real AP
 and return identical JSON schemas so the orchestrator layer never changes.
 """
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/mock", tags=["External Intelligence (Mock)"])
+
+_last_entity = {"name": "Unknown Entity", "cin": "U27100MH2010PTC123456"}
+
+class EntityUpdate(BaseModel):
+    entity_name: str
+    cin: str
+
+@router.post(
+    "/set-entity",
+    summary="Update the simulated entity",
+    description="Updates the underlying mock entity to dynamically match the uploaded PDF."
+)
+async def set_entity(payload: EntityUpdate):
+    _last_entity["name"] = payload.entity_name
+    _last_entity["cin"] = payload.cin
+    return {"status": "success", "entity": _last_entity}
 
 
 @router.get(
@@ -30,7 +47,7 @@ async def mock_perfios():
     return {
         "status": "success",
         "provider": "Perfios (mock)",
-        "entity": "Acme Steels Pvt Ltd",
+        "entity": _last_entity["name"],
         "assessment_period": "FY 2022-23",
         "gstr_2a_3b_mismatch_pct": 18.5,      # > 15% → P-01 Ghost Input Trap
         "circular_trading_flag": False,
@@ -61,8 +78,8 @@ async def mock_karza():
     return {
         "status": "success",
         "provider": "Karza (mock)",
-        "entity": "Acme Steels Pvt Ltd",
-        "cin": "U27100MH2010PTC123456",
+        "entity": _last_entity["name"],
+        "cin": _last_entity["cin"],
         "active_litigations": [
             "Section 138 NI Act – Cheque Bounce – Pending at JMFC Mumbai"
         ],
@@ -99,12 +116,12 @@ async def mock_network_graph():
     return {
         "status": "success",
         "provider": "Network Intelligence (mock)",
-        "entity": "Acme Steels Pvt Ltd",
+        "entity": _last_entity["name"],
         "circular_trading_detected": True,
         "nodes": [
             {
                 "id": "acme",
-                "label": "Acme Steels\n(Applicant)",
+                "label": f"{_last_entity['name']}\n(Applicant)",
                 "type": "applicant",
                 "amount_cr": 5.0,
             },

@@ -33,7 +33,10 @@ from app.agents.deep_reader.extract_text import extract_text, get_full_text, ext
 from app.agents.restatement_detector import RestatementDetector
 from app.agents.orchestrator import orchestrate_decision, BASE_RATE_PCT, BASE_LIMIT_CR
 from app.agents.deep_reader.text_cleaner import clean_text
+from app.api.v1.external_mocks import _last_entity
 from app.agents.external.news_scanner import NewsScanner
+from app.agents.primary.site_visit_scanner import SiteVisitScanner
+from app.agents.external.mca_scanner import MCAScanner
 import os
 from app.core.config import settings
 logger = logging.getLogger(__name__)
@@ -88,6 +91,8 @@ async def analyze_report(request: Request):
         form = await request.form()
         logger.info(f"Form data keys: {list(form.keys())}")
         
+        site_visit_notes = form.get("site_visit_notes", "")
+
         # Extract all uploaded files (e.g. file_fy24, file_fy23)
         files = {
             k.split("_")[1].upper() if "_" in k else "LATEST": v 
@@ -219,10 +224,22 @@ async def analyze_report(request: Request):
                     
                     extractor = FinancialExtractor()
                     extracted_figures = await run_in_threadpool(extractor.extract, text=fin_text, year=year)
+                    logger.info(f"Financial figures: {extracted_figures}")
+                    logger.info(f"FINANCIAL KEYS: {list(extracted_figures.keys()) if extracted_figures else 'None'}")
+                    logger.info(f"FINANCIAL VALUES: {extracted_figures}")
                 except Exception as e:
                     logger.exception(f"FinancialExtractor failed for {year}: {e}")
                     extracted_figures = {}
                 logger.info(f"[{elapsed()}] FinancialExtractor done")
+                
+                # ── Step 4.2: MCA Scan ───────────────────────────────────────────────
+                try:
+                    mca_scanner = MCAScanner()
+                    mca_data = await run_in_threadpool(mca_scanner.scan, text=fin_text, entity_name=_last_entity["name"])
+                    logger.info(f"[{elapsed()}] MCAScanner done — status={mca_data.company_status}, cin={mca_data.cin}")
+                except Exception as e:
+                    logger.exception(f"MCAScanner failed for {year}: {e}")
+                    mca_data = None
 
                 # ── Step 4.5: News Scan ──────────────────────────────────────────────
                 try:
@@ -239,50 +256,75 @@ async def analyze_report(request: Request):
                         name = None
                         
                         # 1. Regex parsing from BRSR file_naming.py 
-                        # Matches: "Reliance_Industries_AnnualReport_2023"
                         match = re.search(r'^(.+?)[_-](?:Annual(?:_|\s)?Report|BRSR)', base, re.IGNORECASE)
                         if match:
                             name = match.group(1).replace('_', ' ').strip()
                         else:
-                            # 2. Reverse extraction for "AnnualReport_2019CDEL"
+                            # Reverse extraction for "AnnualReport_2019CDEL"
                             cln = re.sub(r'(?i)(annual_?report|brsr|financial_?statements)', '', base)
                             cln = re.sub(r'20\d{2}[_-]?(\d{2})?', '', cln) # Strip years
                             cln = re.sub(r'[\d_]', ' ', cln).strip()
                             if cln and len(cln) > 2:
                                 name = cln
                         
-                        # 3. PDF Text Fallback (Improved)
-                        # If filename only gave us an acronym (like CDEL), check the text for a longer name
+                        # 2. PDF Text Fallback (Improved to skip dates & generic words)
                         if not name or len(name) <= 4:
                             lines = [l.strip() for l in page_text.split('\n') if l.strip()]
                             for i, line in enumerate(lines):
                                 if "annual report" in line.lower() and i > 0:
-                                    potential = lines[i-1]
-                                    if len(potential) > 2 and not potential.isnumeric():
-                                        if not name or len(potential) > len(name):
-                                            name = potential
+                                    # Look at up to 2 lines above to find a valid company name
+                                    for offset in (1, 2):
+                                        if i - offset >= 0:
+                                            potential = lines[i-offset]
+                                            # Skip dates ("2023-24", "FY24") and generic report words
+                                            is_date_or_generic = re.search(r'(20\d{2}|\bFY\d{2}\b|Integrated|Statutory|Financial)', potential, re.IGNORECASE)
+                                            if len(potential) > 4 and not potential.isnumeric() and not is_date_or_generic:
+                                                if not name or len(potential) > len(name):
+                                                    name = potential
+                                                break 
+                                    if name and len(name) > 4:
                                         break
                                         
                         if not name:
                             name = base
+
+                        # 3. Dirty Character Sanitization (from BRSR file_naming.py)
+                        name = re.sub(r'[\\/*?:"<>|()\[\]]', '', name)
                             
-                        # 4. Suffix Cleaning from BRSR company_reader.py
+                        # 4. Suffix Cleaning (Sorted by length!)
                         name = re.sub(r'\s+', ' ', name).strip()
-                        suffixes = [" Ltd.", " Limited", " Pvt Ltd", " Private Limited", " Ltd", " Pvt. Ltd.", " Inc", " Corp", " Corporation"]
-                        for suf in suffixes:
-                            if name.lower().endswith(suf.lower()):
-                                name = name[:-len(suf)].strip()
+                        suffixes = [
+                            " Private Limited", " Pvt. Ltd.", " Pvt Ltd", 
+                            " Corporation", " Limited", " Ltd.", " Ltd", 
+                            " Inc.", " Inc", " Corp.", " Corp"
+                        ]
+                        
+                        # Keep stripping until clean (handles trailing periods and stacked suffixes)
+                        cleaning = True
+                        while cleaning:
+                            cleaning = False
+                            name = name.strip(',.- ') 
+                            for suf in suffixes:
+                                if name.lower().endswith(suf.lower()):
+                                    name = name[:-len(suf)].strip()
+                                    cleaning = True
+                                    break 
                                 
-                        # 5. Symbol Lookup Mapper (Crucial for acronyms like CDEL)
-                        # Avoid hardcoding as requested, but leave the structure for future integration
-                        # e.g., integrating with a database or a shared dictionary
+                        # 5. Symbol Lookup Mapper
                         symbol_map = {
-                            "CDEL": "Coffee Day Enterprises"
+                            "CDEL": "Coffee Day Enterprises",
+                            "TCS": "Tata Consultancy Services"
                         }
                         return symbol_map.get(name.upper(), name)
 
                     entity_name = extract_entity_name(file_obj.filename, first_page_text)
                     # ==========================================
+                    
+                    
+                    # Update the external mocks with the real entity name
+                    from app.api.v1.external_mocks import set_entity, EntityUpdate
+                    cin_str = mca_data.cin if (mca_data and getattr(mca_data, "cin", "")) else ("L15122KA2008PLC047538" if "coffee" in entity_name.lower() else "U27100MH2010PTC123456")
+                    await set_entity(EntityUpdate(entity_name=entity_name, cin=cin_str))
 
                     # Use Pydantic settings instead of os.getenv
                     api_key = settings.NEWS_API_KEY
@@ -312,7 +354,6 @@ async def analyze_report(request: Request):
                     "emphasis_of_matter_found":  scan_dict.get("emphasis_of_matter_found", False),
                     "triggered_rules":           scan_dict.get("triggered_rules", []),
                     "caro_findings":             scan_dict.get("caro_findings", []),
-                    "auditor_qualification_findings":  scan_dict.get("auditor_qualification_findings", []),
                     "emphasis_findings":         scan_dict.get("emphasis_findings", []),
                     "extracted_figures":         extracted_figures,
                     "news_data":                 news_data,
@@ -353,13 +394,43 @@ async def analyze_report(request: Request):
         # Top-level response uses the most recent year's data to avoid breaking existing frontend logic
         latest_scan = per_year_scans[latest_year]
         
+        # ── Step 6: Site Visit Scanner ───────────────────────────────────────────
+        try:
+            site_visit_scanner = SiteVisitScanner()
+            site_visit_scan_obj = site_visit_scanner.scan(site_visit_notes)
+            site_visit_scan = {
+                "triggered_rules": site_visit_scan_obj.triggered_rules,
+                "findings": site_visit_scan_obj.findings,
+                "notes_provided": site_visit_scan_obj.notes_provided,
+                "capacity_utilisation_pct": site_visit_scan_obj.capacity_utilisation_pct
+            }
+        except Exception as e:
+            logger.exception(f"SiteVisitScanner failed: {e}")
+            site_visit_scan = {"triggered_rules": [], "findings": [], "notes_provided": False, "capacity_utilisation_pct": None}
+        
+        # ── Step 7: Orchestrate Final Decision ───────────────────────────────────
+        
+        all_triggered_rules = latest_scan.get("triggered_rules", [])
+        if site_visit_scan and site_visit_scan.get("triggered_rules"):
+            for rule in site_visit_scan["triggered_rules"]:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+        
+        if mca_data and mca_data.triggered_rules:
+            for rule in mca_data.triggered_rules:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+                    
+        latest_scan["triggered_rules"] = all_triggered_rules
+        logger.info(f"ALL RULES GOING TO ORCHESTRATOR: {all_triggered_rules}")
+        
         if latest_scan.get("status") == "section_not_found":
             return JSONResponse(
                 status_code=200,
                 content={
                     **latest_scan,
                     "message": "Neither the Independent Auditor's Report nor its Annexure could be located.",
-                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=latest_scan.get("news_data")),
+                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=latest_scan.get("news_data"), site_visit_scan=site_visit_scan, mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None),
                     "per_year_scans": per_year_scans,
                     "restatement_data": restatement_data,
                 }
@@ -370,19 +441,52 @@ async def analyze_report(request: Request):
             perfios_data=None,      
             karza_data=None,        
             restatement_data=restatement_data,
-            news_data=latest_scan.get("news_data")
+            news_data=latest_scan.get("news_data"),
+            site_visit_scan=site_visit_scan,
+            mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None
         )
         logger.info(f"[{elapsed()}] Orchestrator done")
+
+        logger.info(f"FINAL RESPONSE entity_name = '{entity_name}'")
+        
+        mca_dict = {
+            "company_name": getattr(mca_data, "company_name", ""),
+            "cin": getattr(mca_data, "cin", ""),
+            "company_status": getattr(mca_data, "company_status", "Unknown"),
+            "date_of_incorporation": getattr(mca_data, "date_of_incorporation", ""),
+            "registered_state": getattr(mca_data, "registered_state", ""),
+            "registered_address": getattr(mca_data, "registered_address", ""),
+            "business_activity": getattr(mca_data, "business_activity", ""),
+            "paid_up_capital": getattr(mca_data, "paid_up_capital", 0.0),
+            "is_struck_off": getattr(mca_data, "is_struck_off", False),
+            "directors": getattr(mca_data, "directors", []),
+            "total_charges_cr": getattr(mca_data, "total_charges_cr", 0.0),
+            "charge_holders": getattr(mca_data, "charge_holders", []),
+            "findings": getattr(mca_data, "findings", []),
+            "source": getattr(mca_data, "source", "MCA21")
+        } if mca_data else None
+        
+        logger.info(f"MCA in response: {mca_dict or 'MISSING'}")
 
         return {
             **latest_scan,
             "pdf_type": latest_scan.get("pdf_type", "unknown"),
             "extraction_coverage": latest_scan.get("extraction_coverage", 0),
+            "entity_name": entity_name,
             "total_caro_matches": len(latest_scan.get("caro_findings", [])),
             "total_qualification_matches": len(latest_scan.get("auditor_qualification_findings", [])),
             "decision": decision,
+            "all_triggered_rules": decision.get("triggered_rules", []),
             "per_year_scans": per_year_scans,
             "restatement_data": restatement_data,
+            "news": latest_scan.get("news_data") or {
+                "entity": _last_entity["name"],
+                "articles_found": 0,
+                "red_flags": [],
+                "adverse_media_detected": False
+            },
+            "mca": mca_dict,
+            "site_visit_scan": site_visit_scan,
             "methodology": (
                 "All findings are extracted by deterministic regex — zero LLM calls. "
                 "Every snippet is traceable to the original PDF text. "

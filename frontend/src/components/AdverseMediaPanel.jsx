@@ -1,81 +1,81 @@
 import React from 'react';
-import { AlertCircle, CheckCircle, ExternalLink, Newspaper } from 'lucide-react';
+import { ShieldAlert, ExternalLink, Shield } from 'lucide-react';
+import { RULE_DISPLAY_NAMES } from '../App';
 
 export default function AdverseMediaPanel({ newsData }) {
-    if (!newsData) return null;
-
-    const { entity, articles_found, red_flags, adverse_media_detected } = newsData;
-
-    if (!adverse_media_detected) {
+    if (!newsData || newsData.articles_found === 0) {
         return (
-            <div className="mt-6 border-2 border-border bg-paper p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                    <Newspaper size={120} />
+            <div className="flex flex-col items-center justify-center p-12 border-2 border-border h-full bg-paper">
+                <Shield className="w-16 h-16 text-[#167A3E] mb-4" />
+                <div className="border-[3px] border-[#167A3E] text-[#167A3E] px-4 py-2 font-mono font-bold uppercase tracking-widest transform -rotate-2">
+                    NO ADVERSE MEDIA DETECTED
                 </div>
-                <div className="flex items-start gap-4">
-                    <div className="bg-[#167A3E]/10 p-2 border-2 border-[#167A3E]">
-                        <CheckCircle className="text-[#167A3E]" size={24} />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-display font-black uppercase tracking-tight text-ink mb-1">
-                            Adverse Media Scan
-                        </h2>
-                        <p className="text-sm font-serif text-ink">
-                            Scanned <strong>{articles_found}</strong> recent articles for <strong>{entity}</strong>.
-                            No severe red flags (fraud, insolvency, regulatory action, etc.) were found in the headlines.
-                        </p>
-                    </div>
+                <p className="mt-4 font-mono text-xs text-muted">
+                    No high-severity red flags found in recent news for {newsData?.entity || "this entity"}.
+                </p>
+                <div className="mt-auto font-mono text-xs font-bold text-ink border-t-2 border-border w-full text-center pt-4">
+                    SOURCE: NEWSAPI.ORG — LIVE SEARCH
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="mt-6 border-2 border-red bg-red/5 p-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-red">
-                <Newspaper size={120} />
-            </div>
-            <div className="flex items-start gap-4 mb-6 relative z-10">
-                <div className="bg-red flex items-center justify-center p-2">
-                    <AlertCircle className="text-white" size={24} />
+        <div className="flex flex-col h-full bg-paper border-2 border-border">
+            {/* Red Banner for Adverse Media Detected */}
+            {newsData.adverse_media_detected && (
+                <div className="bg-red text-white p-4 font-display font-black uppercase text-xl border-b-2 border-border flex items-center gap-3">
+                    <ShieldAlert className="w-6 h-6" />
+                    ADVERSE MEDIA DETECTED — {RULE_DISPLAY_NAMES["P-13"] || "P-13"} TRIGGERED
                 </div>
-                <div>
-                    <h2 className="text-xl font-display font-black uppercase tracking-tight text-red mb-1">
-                        Adverse Media Detected
-                    </h2>
-                    <p className="text-sm font-serif text-ink">
-                        Scanned <strong>{articles_found}</strong> recent articles for <strong>{entity}</strong>.
-                        Found <strong>{red_flags.length}</strong> red flags requiring immediate manual review.
-                    </p>
-                </div>
-            </div>
+            )}
 
-            <div className="space-y-4 relative z-10">
-                {red_flags.map((flag, idx) => (
-                    <a
-                        key={idx}
-                        href={flag.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block border-2 border-red/30 bg-paper hover:bg-red/5 hover:border-red transition-colors p-4 group"
-                    >
-                        <div className="flex justify-between items-start gap-4">
-                            <div>
-                                <h3 className="text-base font-serif font-bold text-ink group-hover:text-red transition-colors mb-2 leading-tight">
-                                    {flag.headline}
-                                </h3>
-                                <div className="flex items-center gap-3 text-xs font-mono text-muted uppercase">
-                                    <span className="bg-red/10 text-red px-1.5 py-0.5 border border-red/20">
-                                        {flag.severity} SEVERITY
-                                    </span>
-                                    <span>{flag.source}</span>
-                                    <span>{flag.published}</span>
+            <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
+                <div className="font-mono text-xs font-bold text-ink mb-2">
+                    Found {newsData.articles_found} articles with {newsData.red_flags.length} red flags for: <span className="bg-ink text-white px-2 py-0.5">{newsData.entity}</span>
+                </div>
+
+                {newsData.red_flags.map((flag, idx) => {
+                    const isHigh = flag.severity === "HIGH";
+                    const severityColor = isHigh ? "bg-red text-white" : "bg-[#D4A017] text-white";
+
+                    return (
+                        <div key={idx} className="border-[3px] border-ink p-5 bg-paper relative flex flex-col gap-3">
+                            {/* Top row: Severity badge + Source/Date */}
+                            <div className="flex justify-between items-start">
+                                <span className={`font-mono text-xs font-bold px-2 py-1 uppercase tracking-wider ${severityColor}`}>
+                                    [{flag.severity}]
+                                </span>
+                                <div className="text-right">
+                                    <div className="font-mono text-xs font-bold text-ink uppercase">{flag.source}</div>
+                                    <div className="font-mono text-[10px] text-muted">{new Date(flag.published_at).toLocaleDateString()}</div>
                                 </div>
                             </div>
-                            <ExternalLink size={16} className="text-muted group-hover:text-red transition-colors flex-shrink-0 mt-1" />
+
+                            {/* Headline */}
+                            <h3 className="font-display font-bold text-lg text-ink leading-tight">
+                                {flag.headline}
+                            </h3>
+
+                            {/* Link */}
+                            {flag.url && (
+                                <a
+                                    href={flag.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-2 self-start flex items-center gap-1 font-mono text-xs font-bold text-ink hover:text-red border-b-2 border-transparent hover:border-red transition-colors"
+                                >
+                                    VIEW SOURCE <ExternalLink size={12} />
+                                </a>
+                            )}
                         </div>
-                    </a>
-                ))}
+                    );
+                })}
+            </div>
+
+            {/* Footer */}
+            <div className="font-mono text-xs font-bold text-ink border-t-2 border-border p-4 text-center bg-paper-raised">
+                SOURCE: NEWSAPI.ORG — LIVE SEARCH
             </div>
         </div>
     );

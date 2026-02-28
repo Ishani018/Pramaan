@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: Path = Path("tmp/uploads")
 
     NEWS_API_KEY: str | None = None
+    DATA_GOV_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

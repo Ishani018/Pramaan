@@ -13,7 +13,7 @@ class NewsScanner:
         logger.info(f"NewsScanner searching: '{entity_name}'")
         
         # Search for entity name + red flag keywords
-        query = f'"{entity_name}" AND (fraud OR default OR insolvency OR "ED raid" OR NCLT OR "cheque bounce" OR RBI OR SEBI)'
+        query = f'"{entity_name}" AND (fraud OR default OR insolvency OR NCLT OR "ED" OR bankruptcy OR "cheque bounce" OR "loan default" OR RBI OR SEBI)'
         
         response = await run_in_threadpool(
             requests.get,
@@ -32,12 +32,20 @@ class NewsScanner:
         # Score each article for severity
         red_flags = []
         for article in articles:
-            headline = article.get("title", "")
-            severity = "HIGH" if any(w in headline.lower() for w in ["fraud", "ed raid", "arrested", "default"]) else "MEDIUM"
+            headline = article.get("title", "") or ""
+            
+            severity = "HIGH" if any(w in headline.lower() 
+                       for w in ["fraud", "ed raid", "arrested", 
+                       "default", "insolvency", "NCLT"]) else "MEDIUM"
+            
+            # Fix date parsing
+            published_raw = article.get("publishedAt", "")
+            published = published_raw[:10] if published_raw else "Unknown"
+            
             red_flags.append({
                 "headline": headline,
                 "source": article["source"]["name"],
-                "published": article["publishedAt"][:10],
+                "published": published,
                 "url": article["url"],
                 "severity": severity
             })

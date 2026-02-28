@@ -1,5 +1,6 @@
 import { ShieldAlert, ShieldCheck, AlertCircle, FileSearch, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
+import { RULE_DISPLAY_NAMES } from '../App'
 
 function FlagCard({ label, found, ruleId, description }) {
     return (
@@ -110,90 +111,101 @@ export default function CompliancePanel({ result, loading }) {
     const totalIssues = (result.total_caro_matches || 0) + (result.total_qualification_matches || 0)
 
     return (
-        <div className="border-[3px] border-border bg-paper flex flex-col">
-            {/* Summary header */}
-            <div className={`p-6 flex items-center gap-4 border-b-[3px] ${totalIssues > 0 ? 'border-red bg-red-light' : 'border-border bg-paper'}`}>
-                <div className={`w-14 h-14 flex items-center justify-center border-2 border-ink flex-shrink-0
+        <div className="border-[3px] border-border bg-paper flex flex-col relative overflow-hidden">
+            {/* Background Watermark Stamp */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-10">
+                <div className={`border-8 px-12 py-6 font-display font-black uppercase text-8xl tracking-widest transform -rotate-15 flex items-center justify-center whitespace-nowrap
+                    ${totalIssues > 0 ? 'text-red border-red' : 'text-[#167A3E] border-[#167A3E]'}`}>
+                    {totalIssues > 0 ? 'FLAGGED' : 'APPROVED'}
+                </div>
+            </div>
+
+            {/* Overview Content (z-10 to stay above watermark) */}
+            <div className="relative z-10 flex flex-col flex-1">
+                {/* Summary header */}
+                <div className={`p-6 flex items-center gap-4 border-b-[3px] ${totalIssues > 0 ? 'border-red bg-red-light' : 'border-border bg-paper'}`}>
+                    <div className={`w-14 h-14 flex items-center justify-center border-2 border-ink flex-shrink-0
                          ${totalIssues > 0 ? 'bg-red text-white' : 'bg-paper text-ink'}`}>
-                    {totalIssues > 0
-                        ? <ShieldAlert size={28} />
-                        : <ShieldCheck size={28} />
-                    }
+                        {totalIssues > 0
+                            ? <ShieldAlert size={28} />
+                            : <ShieldCheck size={28} />
+                        }
+                    </div>
+                    <div>
+                        <h1 className={`font-display font-black text-3xl uppercase tracking-tight ${totalIssues > 0 ? 'text-red' : 'text-ink'}`}>
+                            {totalIssues > 0 ? `${totalIssues} Compliance Issue${totalIssues > 1 ? 's' : ''} Found` : 'Clean Report — No Issues Found'}
+                        </h1>
+                        <p className="font-mono text-xs font-bold text-ink uppercase mt-2">Source file: {result.file_name}</p>
+                    </div>
                 </div>
-                <div>
-                    <h1 className={`font-display font-black text-3xl uppercase tracking-tight ${totalIssues > 0 ? 'text-red' : 'text-ink'}`}>
-                        {totalIssues > 0 ? `${totalIssues} Compliance Issue${totalIssues > 1 ? 's' : ''} Found` : 'Clean Report — No Issues Found'}
-                    </h1>
-                    <p className="font-mono text-xs font-bold text-ink uppercase mt-2">Source file: {result.file_name}</p>
-                </div>
-            </div>
 
-            {/* Boolean flags */}
-            <div className="flex flex-col">
-                <FlagCard
-                    label="CARO 2020 Statutory Default"
-                    found={result.caro_default_found}
-                    ruleId="P-03"
-                    description={
-                        result.caro_default_found
-                            ? `${result.total_caro_matches} match(es) found — statutory dues not deposited under Clause (vii)`
-                            : 'No statutory default mentioned under CARO 2020 Clause (vii)'
-                    }
-                />
-                <FlagCard
-                    label="Auditor Qualification"
-                    found={result.adverse_opinion_found}
-                    ruleId="P-03"
-                    description={
-                        result.adverse_opinion_found
-                            ? `${result.total_qualification_matches} qualification(s) detected — "Except for", "Adverse", or "Qualified" opinion`
-                            : 'Auditor issued an unqualified (clean) opinion'
-                    }
-                />
-                {result.emphasis_of_matter_found && (
+                {/* Boolean flags */}
+                <div className="flex flex-col">
                     <FlagCard
-                        label="Emphasis of Matter / Going Concern"
-                        found={true}
-                        ruleId="P-04"
-                        description="Auditor flagged going concern or material uncertainty — requires manual credit committee review"
+                        label="CARO 2020 Statutory Default"
+                        found={result.caro_default_found}
+                        ruleId={RULE_DISPLAY_NAMES["P-03"] || "P-03"}
+                        description={
+                            result.caro_default_found
+                                ? `${result.total_caro_matches} match(es) found — statutory dues not deposited under Clause (vii)`
+                                : 'No statutory default mentioned under CARO 2020 Clause (vii)'
+                        }
                     />
-                )}
-            </div>
-
-            {/* Section detected */}
-            <div className="p-6 border-b-2 border-border bg-paper-raised">
-                <h3 className="font-display font-bold uppercase tracking-wider text-sm mb-4 border-b-2 border-border pb-2 inline-block">
-                    Sections Scanned
-                </h3>
-                <div className="bg-paper border-2 border-border p-4">
-                    <SectionBadge label="Independent Auditor's Report" info={result.sections_detected?.auditors_report} />
-                    <SectionBadge label="Annexure to Auditor's Report (CARO)" info={result.sections_detected?.auditors_annexure} />
+                    <FlagCard
+                        label="Auditor Qualification"
+                        found={result.adverse_opinion_found}
+                        ruleId={RULE_DISPLAY_NAMES["P-03"] || "P-03"}
+                        description={
+                            result.adverse_opinion_found
+                                ? `${result.total_qualification_matches} qualification(s) detected — "Except for", "Adverse", or "Qualified" opinion`
+                                : 'Auditor issued an unqualified (clean) opinion'
+                        }
+                    />
+                    {result.emphasis_of_matter_found && (
+                        <FlagCard
+                            label="Emphasis of Matter / Going Concern"
+                            found={true}
+                            ruleId={RULE_DISPLAY_NAMES["P-04"] || "P-04"}
+                            description="Auditor flagged going concern or material uncertainty — requires manual credit committee review"
+                        />
+                    )}
                 </div>
-            </div>
 
-            {/* Evidence drawers */}
-            <div className="border-t-[3px] border-border">
-                <FindingList
-                    title="CARO 2020 Findings"
-                    findings={result.caro_findings}
-                    color="var(--red)"
-                />
-                <FindingList
-                    title="Auditor Qualification Findings"
-                    findings={result.auditor_qualification_findings}
-                    color="var(--red)"
-                />
-                {result.emphasis_of_matter_found && (
+                {/* Section detected */}
+                <div className="p-6 border-b-2 border-border bg-paper-raised">
+                    <h3 className="font-display font-bold uppercase tracking-wider text-sm mb-4 border-b-2 border-border pb-2 inline-block">
+                        Sections Scanned
+                    </h3>
+                    <div className="bg-paper border-2 border-border p-4">
+                        <SectionBadge label="Independent Auditor's Report" info={result.sections_detected?.auditors_report} />
+                        <SectionBadge label="Annexure to Auditor's Report (CARO)" info={result.sections_detected?.auditors_annexure} />
+                    </div>
+                </div>
+
+                {/* Evidence drawers */}
+                <div className="border-t-[3px] border-border">
                     <FindingList
-                        title="Emphasis of Matter Findings"
-                        findings={result.emphasis_findings}
-                        color="var(--gold)"
+                        title="CARO 2020 Findings"
+                        findings={result.caro_findings}
+                        color="var(--red)"
                     />
-                )}
+                    <FindingList
+                        title="Auditor Qualification Findings"
+                        findings={result.auditor_qualification_findings}
+                        color="var(--red)"
+                    />
+                    {result.emphasis_of_matter_found && (
+                        <FindingList
+                            title="Emphasis of Matter Findings"
+                            findings={result.emphasis_findings}
+                            color="var(--gold)"
+                        />
+                    )}
+                </div>
             </div>
 
             {/* Methodology note */}
-            <div className="flex gap-3 bg-ink p-4 text-paper">
+            <div className="flex gap-3 bg-ink p-4 text-paper relative z-10">
                 <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
                 <p className="text-xs font-mono uppercase tracking-wide leading-relaxed">{result.methodology}</p>
             </div>

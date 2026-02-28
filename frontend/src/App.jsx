@@ -19,9 +19,24 @@ import PDFViewer from './components/PDFViewer'
 import WaterfallChart from './components/WaterfallChart'
 import ComplianceHeatmap from './components/HallucinationHeatmap'
 import CompliancePanel from './components/CompliancePanel'
-import AdverseMediaPanel from './components/AdverseMediaPanel'
 import NetworkAnalysis from './components/NetworkAnalysis'
+import AdverseMediaPanel from './components/AdverseMediaPanel'
 import RestatementAnalysis from './components/RestatementAnalysis'
+
+export const RULE_DISPLAY_NAMES = {
+    "P-01": "GST-01: Revenue Mismatch",
+    "P-02": "KYC-01: Director Network Risk",
+    "P-03": "AUDIT-01: Statutory Default",
+    "P-04": "AUDIT-02: Emphasis of Matter",
+    "P-06": "FRAUD-01: Circular Trading",
+    "P-07": "PRIMARY-01: Site Visit Risk",
+    "P-08": "BANK-01: Suspicious Routing",
+    "P-09": "RESTATE-01: Silent Restatement",
+    "P-10": "AUDIT-03: Auditor Rotation",
+    "P-11": "RATING-01: Sub-Investment Grade",
+    "P-12": "RATING-02: Downgrade/Default",
+    "P-13": "MEDIA-01: Adverse Media"
+}
 
 // ── Client-side penalty orchestrator (mirrors backend logic) ─────────────────
 const BASE_RATE = 9.0
@@ -37,15 +52,14 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
     if (restatementData?.restatements_detected) triggered.push('P-09')
     if (restatementData?.auditor_changed) triggered.push('P-10')
     if (pdfScan?.news_data?.adverse_media_detected) triggered.push('P-13')
-
     const RULES = {
-        'P-01': { name: 'Ghost Input Trap', bps: 100, cut: 10, manual: false, trigger: 'GSTR-2A vs 3B mismatch > 15% (Perfios)' },
-        'P-03': { name: 'Statutory Default / Audit Qual', bps: 150, cut: 20, manual: false, trigger: 'CARO 2020 Clause (vii) / auditor qualification' },
-        'P-04': { name: 'Emphasis of Matter', bps: 75, cut: 0, manual: true, trigger: 'Going concern or material uncertainty flagged' },
-        'P-06': { name: 'Circular Fraud Detected', bps: 0, cut: 50, manual: false, trigger: 'Circular trading loop detected via network graph (Acme → Vertex → Nova → Acme)' },
-        'P-09': { name: 'Financial Restatement', bps: 200, cut: 40, manual: true, trigger: 'Prior year financial comparative figures restated by >2%' },
-        'P-10': { name: 'Auditor Rotation / Change', bps: 75, cut: 10, manual: true, trigger: 'Change in statutory auditor detected across reporting periods' },
-        'P-13': { name: 'Adverse Media Detected', bps: 50, cut: 0, manual: true, trigger: 'NewsScanner found high-severity red flags (fraud, ED raid, etc.)' },
+        'P-01': { name: RULE_DISPLAY_NAMES['P-01'], bps: 100, cut: 10, manual: false, trigger: 'GSTR-2A vs 3B mismatch > 15% (Perfios)' },
+        'P-03': { name: RULE_DISPLAY_NAMES['P-03'], bps: 150, cut: 20, manual: false, trigger: 'CARO 2020 Clause (vii) / auditor qualification' },
+        'P-04': { name: RULE_DISPLAY_NAMES['P-04'], bps: 75, cut: 0, manual: true, trigger: 'Going concern or material uncertainty flagged' },
+        'P-06': { name: RULE_DISPLAY_NAMES['P-06'], bps: 0, cut: 50, manual: false, trigger: 'Circular trading loop detected via network graph (Acme → Vertex → Nova → Acme)' },
+        'P-09': { name: RULE_DISPLAY_NAMES['P-09'], bps: 200, cut: 40, manual: true, trigger: 'Prior year financial comparative figures restated by >2%' },
+        'P-10': { name: RULE_DISPLAY_NAMES['P-10'], bps: 75, cut: 10, manual: true, trigger: 'Change in statutory auditor detected across reporting periods' },
+        'P-13': { name: RULE_DISPLAY_NAMES['P-13'], bps: 50, cut: 0, manual: true, trigger: 'NewsScanner found high-severity red flags (fraud, ED raid, etc.)' },
     }
 
     let rate = BASE_RATE
@@ -77,18 +91,19 @@ const TABS = [
     { id: 'waterfall', label: 'Rate Waterfall', icon: BarChart2 },
     { id: 'heatmap', label: 'Evidence Grid', icon: Map },
     { id: 'network', label: 'Network Analysis', icon: Network },
+    { id: 'adverse-media', label: 'Adverse Media', icon: ShieldAlert },
     { id: 'restatement', label: 'Restatement Analysis', icon: TrendingDown },
 ]
 
 const ALL_RULES = [
-    { id: 'P-01', label: 'Ghost Input' },
-    { id: 'P-02', label: 'Family Web' },
-    { id: 'P-03', label: 'Stat. Default' },
-    { id: 'P-04', label: 'Emphasis' },
-    { id: 'P-06', label: 'Circ. Fraud' },
-    { id: 'P-09', label: 'Restatement', severity: 'CRITICAL' },
-    { id: 'P-10', label: 'Auditor Change', severity: 'HIGH' },
-    { id: 'P-13', label: 'Adverse Media', severity: 'HIGH' },
+    { id: 'P-01', label: RULE_DISPLAY_NAMES['P-01'] },
+    { id: 'P-02', label: RULE_DISPLAY_NAMES['P-02'] },
+    { id: 'P-03', label: RULE_DISPLAY_NAMES['P-03'] },
+    { id: 'P-04', label: RULE_DISPLAY_NAMES['P-04'] },
+    { id: 'P-06', label: RULE_DISPLAY_NAMES['P-06'] },
+    { id: 'P-09', label: RULE_DISPLAY_NAMES['P-09'], severity: 'CRITICAL' },
+    { id: 'P-10', label: RULE_DISPLAY_NAMES['P-10'], severity: 'HIGH' },
+    { id: 'P-13', label: RULE_DISPLAY_NAMES['P-13'], severity: 'HIGH' },
 ]
 
 function StatusBadge({ status, message }) {
@@ -188,13 +203,12 @@ export default function App() {
         }, 30000)
 
         try {
-            // Run all three in parallel
             const formData = new FormData()
-            selectedFiles.forEach((f) => {
-                // e.g., yearLabel might be "FY24" -> "file_fy24"
+            selectedFiles.forEach(f => {
                 const fieldName = `file_${f.yearLabel.toLowerCase().replace(/[^a-z0-9]/g, '')}`
                 formData.append(fieldName, f.file)
             })
+            formData.append("site_visit_notes", primaryNotes)
 
             const [pdfResp, perfiosResp, karzaResp, networkResp] = await Promise.all([
                 axios.post('/api/v1/analyze-report', formData, {
@@ -247,19 +261,28 @@ export default function App() {
         }
     }
 
-    // ── Download CAM ───────────────────────────────────────────────────────────
     const handleDownloadCAM = async () => {
         if (!decision) return
         setCamLoading(true)
+        console.log("CAM entity_name:", pdfResult?.entity_name)
+        console.log("MCA data being sent:", pdfResult?.mca)
+
+        const allRules = pdfResult?.all_triggered_rules || []
+        console.log("CAM triggered_rules:", allRules)
+
         try {
             const payload = {
-                entity_name: karzaData?.entity || 'Acme Steels Pvt Ltd',
+                entity_name: pdfResult?.entity_name || karzaData?.entity || 'Acme Steels Pvt Ltd',
                 primary_insights: primaryNotes,
                 pdf_scan: pdfResult,
                 perfios: perfiosData,
                 karza: karzaData,
+                mca_data: pdfResult?.mca,
                 decision: decision,
-                triggered_rules: triggeredRules,
+                triggered_rules: allRules,
+                restatement_data: pdfResult?.restatement_data,
+                news_data: pdfResult?.news,
+                site_visit_scan: pdfResult?.site_visit_scan,
             }
             const resp = await axios.post('/api/v1/export-cam', payload, {
                 responseType: 'blob',
@@ -431,10 +454,7 @@ export default function App() {
                     {/* Tab content */}
                     <div className="flex-1 overflow-y-auto p-5">
                         {activeTab === 'compliance' && (
-                            <div className="flex flex-col gap-6">
-                                <CompliancePanel result={pdfResult} loading={loading} />
-                                <AdverseMediaPanel newsData={pdfResult?.news_data} />
-                            </div>
+                            <CompliancePanel result={pdfResult} loading={loading} />
                         )}
                         {activeTab === 'waterfall' && (
                             <div className="flex flex-col gap-6 h-full pb-10">
@@ -480,6 +500,9 @@ export default function App() {
                         )}
                         {activeTab === 'network' && (
                             <NetworkAnalysis />
+                        )}
+                        {activeTab === 'adverse-media' && (
+                            <AdverseMediaPanel newsData={pdfResult?.news} />
                         )}
                         {activeTab === 'restatement' && (
                             <RestatementAnalysis

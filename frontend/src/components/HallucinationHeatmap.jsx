@@ -12,6 +12,7 @@
  */
 import { useState } from 'react'
 import { FileSearch, AlertTriangle, CheckCircle } from 'lucide-react'
+import { RULE_DISPLAY_NAMES } from '../App'
 
 // ── Colour config by finding category ────────────────────────────────────────
 const CATEGORY_STYLE = {
@@ -45,7 +46,7 @@ function FindingCell({ finding, category, isHovered, onHover }) {
                     className="text-xs font-mono font-bold"
                     style={{ color: style.text }}
                 >
-                    {style.rule}
+                    {RULE_DISPLAY_NAMES[style.rule] || style.rule}
                 </span>
             </div>
 
@@ -54,10 +55,12 @@ function FindingCell({ finding, category, isHovered, onHover }) {
                 {finding.pattern}
             </p>
 
-            {/* Snippet preview (truncated) */}
-            <p className="text-xs text-muted leading-relaxed line-clamp-3 font-mono whitespace-pre-wrap">
-                {finding.snippet}
-            </p>
+            {/* Snippet preview (full text scrollable) */}
+            <div className="max-h-32 overflow-y-auto pr-1">
+                <p className="text-xs text-muted leading-relaxed font-mono whitespace-pre-wrap">
+                    {finding.snippet}
+                </p>
+            </div>
         </div>
     )
 }
