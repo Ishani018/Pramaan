@@ -23,6 +23,24 @@ const RULE_META = {
     'P-06': { label: 'P-06 Circular Fraud Detected', color: '#7C3AED', desc: 'Circular trading loop detected via network graph' },
 }
 
+const WATERFALL_LABELS = {
+    "Base Rate": "Base Rate",
+    "P-01": "GST-01",
+    "P-02": "KYC-01",
+    "P-03": "AUDIT-01",
+    "P-04": "AUDIT-02",
+    "P-06": "FRAUD-01",
+    "P-07": "PRIMARY-01",
+    "P-08": "BANK-01",
+    "P-09": "RESTATE-01",
+    "P-10": "AUDIT-03",
+    "P-11": "RATING-01",
+    "P-12": "RATING-02",
+    "P-13": "MEDIA-01",
+    "P-14": "CORP-01",
+    "Final Rate": "Final Rate"
+}
+
 const MOCK_DECISION = {
     base_rate_pct: BASE_RATE,
     final_rate_pct: BASE_RATE,
@@ -148,7 +166,12 @@ export default function WaterfallChart({ decision, triggeredRules = [] }) {
             <ResponsiveContainer width="100%" height={240}>
                 <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1E2D4A" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: '#64748B', fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="label" tick={{ fill: '#64748B', fontSize: 10 }} tickLine={false} axisLine={false}
+                        tickFormatter={(val) => {
+                            const key = Object.keys(WATERFALL_LABELS).find(k => val.startsWith(k))
+                            return key ? WATERFALL_LABELS[key] : val
+                        }}
+                    />
                     <YAxis tickFormatter={v => `${v}%`} tick={{ fill: '#64748B', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 14]} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59,130,246,0.05)' }} />
                     <ReferenceLine y={BASE_RATE} stroke="#3B82F6" strokeDasharray="4 2" strokeOpacity={0.4} />
@@ -170,7 +193,7 @@ export default function WaterfallChart({ decision, triggeredRules = [] }) {
                         const meta = RULE_META[p.rule_id] || {}
                         return (
                             <div key={i} className="flex items-center gap-3 bg-void rounded-lg px-3 py-2">
-                                <span className="badge bg-danger/15 text-danger">{p.rule_id}</span>
+                                <span className="badge bg-danger/15 text-danger">{WATERFALL_LABELS[p.rule_id] || p.rule_id}</span>
                                 <span className="text-xs text-muted flex-1">{p.trigger}</span>
                                 <span className="font-mono text-xs text-danger">+{p.rate_penalty_bps}bps</span>
                                 {p.limit_reduction_pct > 0 && (

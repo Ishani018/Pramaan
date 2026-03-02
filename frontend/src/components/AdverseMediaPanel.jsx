@@ -3,6 +3,21 @@ import { ShieldAlert, ExternalLink, Shield } from 'lucide-react';
 import { RULE_DISPLAY_NAMES } from '../App';
 
 export default function AdverseMediaPanel({ newsData }) {
+    const formatDate = (dateStr) => {
+        if (!dateStr) return "Date unavailable"
+        try {
+            return new Date(dateStr).toLocaleDateString(
+                'en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            }
+            )
+        } catch {
+            return "Date unavailable"
+        }
+    }
+
     if (!newsData || newsData.articles_found === 0) {
         return (
             <div className="flex flex-col items-center justify-center p-12 border-2 border-border h-full bg-paper">
@@ -48,7 +63,9 @@ export default function AdverseMediaPanel({ newsData }) {
                                 </span>
                                 <div className="text-right">
                                     <div className="font-mono text-xs font-bold text-ink uppercase">{flag.source}</div>
-                                    <div className="font-mono text-[10px] text-muted">{new Date(flag.published_at).toLocaleDateString()}</div>
+                                    <div className="font-mono text-[10px] text-muted">
+                                        {formatDate(flag.published)}
+                                    </div>
                                 </div>
                             </div>
 

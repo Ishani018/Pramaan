@@ -4,7 +4,7 @@
  * Shows a row of cards for up to 4 uploaded PDFs, allowing year label edits.
  */
 import { useState, useRef, useCallback } from 'react'
-import { Upload, FileText, X, Eye } from 'lucide-react'
+import { Upload, FileText, X } from 'lucide-react'
 
 export default function PDFViewer({ onFilesChange, isAnalyzing, analyzedData }) {
     const [dragActive, setDragActive] = useState(false)
@@ -126,8 +126,8 @@ export default function PDFViewer({ onFilesChange, isAnalyzing, analyzedData }) 
                                         <p className="font-serif font-bold text-ink text-base truncate">{f.file.name}</p>
                                         {pdfType && (
                                             <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 border ${pdfType === 'text'
-                                                    ? 'border-green-600 text-green-700 bg-green-50'
-                                                    : 'border-[#D4A017] text-[#D4A017] bg-[#FFF8E7]'
+                                                ? 'border-green-600 text-green-700 bg-green-50'
+                                                : 'border-[#D4A017] text-[#D4A017] bg-[#FFF8E7]'
                                                 }`}>
                                                 {pdfType === 'text' ? 'Text PDF' : 'Scanned — OCR'}
                                             </span>
@@ -158,35 +158,6 @@ export default function PDFViewer({ onFilesChange, isAnalyzing, analyzedData }) 
                 </div>
             )}
 
-            {/* Status & Preview */}
-            {activePdf && (
-                <div className="flex-1 flex flex-col gap-2 min-h-0 mt-6 border-t-[3px] border-border pt-4">
-                    <div className="flex items-center justify-between px-1">
-                        <span className="font-display font-bold text-ink uppercase tracking-wide text-sm flex items-center gap-2">
-                            <Eye size={16} className="text-ink" />
-                            Preview: {activePdf.yearLabel}
-                        </span>
-                        {isAnalyzing ? (
-                            <div className="flex items-center gap-2 text-xs font-mono font-bold text-red uppercase">
-                                <span className="w-2 h-2 rounded-none bg-red animate-pulse" />
-                                Analysing
-                            </div>
-                        ) : (
-                            <span className="px-2 py-0.5 border-2 border-ink text-ink font-mono font-bold text-xs uppercase tracking-wide bg-paper">
-                                Ready
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="flex-1 bg-paper overflow-hidden min-h-[300px] relative border-2 border-border mt-2">
-                        <iframe
-                            src={`${activePdf.url}#toolbar=0&navpanes=0&scrollbar=1`}
-                            className="w-full h-full"
-                            title="PDF Preview"
-                        />
-                    </div>
-                </div>
-            )}
         </div>
     )
 }

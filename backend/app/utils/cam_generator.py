@@ -163,9 +163,10 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     # ── SECTION 1: EXECUTIVE SUMMARY ──────────────────────────────────────────
     _add_section_header(doc, "SECTION 1: EXECUTIVE SUMMARY")
     
-    cin = karza.get("corporate_identification_number", "CIN: N/A")
+    cin_display = mca_data.get("cin", "") if mca_data else ""
+    
     _add_body_para(doc, f"Entity Name: {entity_name}")
-    _add_body_para(doc, f"CIN: {cin}")
+    _add_body_para(doc, f"CIN: {cin_display or 'Not found in document'}")
     _add_body_para(doc, f"Assessment Date: {datetime.now().strftime('%d %B %Y')}")
     
     # Final Decision Paragraph
@@ -196,15 +197,28 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
         status = mca.get("company_status", "Pending")
         address = mca.get("registered_address", "")
         activity = mca.get("business_activity", "")
-        paidup = mca.get("paid_up_capital", 0)
+        paidup_raw = mca.get("paid_up_capital", 0)
         cin = mca.get("cin", "Not found")
+        date_raw = mca.get("date_of_incorporation", "")
+        
+        try:
+            dt = datetime.strptime(date_raw[:10], "%Y-%m-%d")
+            date_display = dt.strftime("%d %B %Y")
+        except:
+            date_display = date_raw[:10]
         
         _kv_row(c2_tbl, "Company Status", status)
-        _kv_row(c2_tbl, "Date of Incorporation", mca.get("date_of_incorporation", ""))
+        _kv_row(c2_tbl, "Date of Incorporation", date_display)
         _kv_row(c2_tbl, "Registered State", mca.get("registered_state", ""))
         _kv_row(c2_tbl, "Registered Address", address)
         _kv_row(c2_tbl, "Principal Business Activity", activity)
-        _kv_row(c2_tbl, "Paid-up Capital", f"₹{paidup:,.2f}" if paidup else "N/A")
+        
+        if paidup_raw:
+            paidup_cr = paidup_raw / 10000000
+            _kv_row(c2_tbl, "Paid-up Capital", f"₹{paidup_cr:,.2f} Cr")
+        else:
+            _kv_row(c2_tbl, "Paid-up Capital", "N/A")
+            
         _kv_row(c2_tbl, "CIN", cin)
         
         holders = mca.get("charge_holders", [])

@@ -92,6 +92,10 @@ async def analyze_report(request: Request):
         logger.info(f"Form data keys: {list(form.keys())}")
         
         site_visit_notes = form.get("site_visit_notes", "")
+        
+        # Initialize default values to avoid UnboundLocalError
+        mca_data = None
+        ecourts_data = None
 
         # Extract all uploaded files (e.g. file_fy24, file_fy23)
         files = {

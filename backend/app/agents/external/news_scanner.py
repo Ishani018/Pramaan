@@ -10,10 +10,12 @@ class NewsScanner:
         self.base_url = "https://newsapi.org/v2/everything"
     
     async def scan(self, entity_name: str) -> dict:
-        logger.info(f"NewsScanner searching: '{entity_name}'")
+        # Strip "Limited", "Ltd", "Private" etc for better search matching
+        search_name = entity_name.replace("Limited", "").replace("Ltd", "").replace("Private", "").strip()
+        logger.info(f"NewsScanner searching: '{search_name}'")
         
         # Search for entity name + red flag keywords
-        query = f'"{entity_name}" AND (fraud OR default OR insolvency OR NCLT OR "ED" OR bankruptcy OR "cheque bounce" OR "loan default" OR RBI OR SEBI)'
+        query = f'"{search_name}" AND (fraud OR default OR "ED raid" OR SFIO OR insolvency OR NPA OR "loan default" OR bankruptcy OR scam OR "money laundering")'
         
         response = await run_in_threadpool(
             requests.get,
@@ -39,8 +41,7 @@ class NewsScanner:
                        "default", "insolvency", "NCLT"]) else "MEDIUM"
             
             # Fix date parsing
-            published_raw = article.get("publishedAt", "")
-            published = published_raw[:10] if published_raw else "Unknown"
+            published = article.get("publishedAt", "")
             
             red_flags.append({
                 "headline": headline,
