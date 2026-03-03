@@ -44,6 +44,27 @@ SECTION_CONFIGS = [
             "consolidated financial statements",
             "cash flow statement"
         ]
+    },
+    {
+        "id": "mda_report",
+        "keywords": [
+            "management discussion and analysis",
+            "management's discussion and analysis",
+            "md&a",
+            "management discussion & analysis",
+            "management discussion",
+            "operational and financial performance",
+            "financial review"
+        ],
+        "end_keywords": [
+            "corporate governance",
+            "report on corporate governance",
+            "board's report",
+            "directors' report",
+            "business responsibility report",
+            "financial statements",
+            "standalone financial statements"
+        ]
     }
 ]
 

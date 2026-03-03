@@ -82,6 +82,22 @@ RULE_DEFINITIONS = {
         "limit_reduction_pct": 0,
         "requires_manual_review": True,
     },
+    "P-16": {
+        "name": "MGMT-01: Negative Management Sentiment",
+        "trigger_description": "MD&A sentiment score negative per Loughran-McDonald lexicon analysis",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 5,
+        "requires_manual_review": False,
+        "severity": "MEDIUM"
+    },
+    "P-15": {
+        "name": "LEGAL-01: Active Court Proceedings",
+        "trigger_description": "High-risk court cases found via eCourts public API (NCLT/winding up/fraud/DRT)",
+        "rate_penalty_bps": 100,
+        "limit_reduction_pct": 15,
+        "requires_manual_review": True,
+        "severity": "HIGH"
+    },
 }
 
 

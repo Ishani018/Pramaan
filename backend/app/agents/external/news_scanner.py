@@ -51,11 +51,16 @@ class NewsScanner:
                 "severity": severity
             })
             
-        logger.info(f"NewsScanner: {len(articles)} articles, {len(red_flags)} red flags")
+        triggered_rules = []
+        if len(red_flags) > 0:
+            triggered_rules.append("P-13")
+            
+        logger.info(f"NewsScanner: {len(articles)} articles, {len(red_flags)} red flags, triggered_rules={triggered_rules}")
         
         return {
             "entity": entity_name,
             "articles_found": len(articles),
             "red_flags": red_flags,
-            "adverse_media_detected": len(red_flags) > 0
+            "adverse_media_detected": len(red_flags) > 0,
+            "triggered_rules": triggered_rules
         }

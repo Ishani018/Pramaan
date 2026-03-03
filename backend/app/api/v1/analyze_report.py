@@ -37,8 +37,11 @@ from app.api.v1.external_mocks import _last_entity
 from app.agents.external.news_scanner import NewsScanner
 from app.agents.primary.site_visit_scanner import SiteVisitScanner
 from app.agents.external.mca_scanner import MCAScanner
+from app.agents.deep_reader.mda_analyzer import MDAAnalyzer
+from app.agents.external.ecourts_scanner import ECourtsScanner
 import os
 from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -349,6 +352,48 @@ async def analyze_report(request: Request):
                     news_data = None
                 logger.info(f"[{elapsed()}] NewsScanner done")
 
+                # ── Step 4.55: eCourts Scan ───────────────────────────────────────────
+                try:
+                    ecourts_scanner = ECourtsScanner()
+                    ecourts_data = await run_in_threadpool(ecourts_scanner.scan, entity_name)
+                    logger.info(f"[{elapsed()}] ECourtsScanner done — cases={ecourts_data.cases_found}, high_risk={ecourts_data.high_risk_cases}")
+                except Exception as e:
+                    logger.exception(f"ECourtsScanner failed for {year}: {e}")
+                    ecourts_data = None
+
+                # ── Step 4.6: MD&A Analysis ───────────────────────────────────────────
+                try:
+                    from app.agents.deep_reader.section_boundary_detector import SECTION_CONFIGS
+                    mda_cfg = next((c for c in SECTION_CONFIGS if c["id"] == "mda_report"), None)
+                    mda_boundary = None
+                    mda_text = ""
+                    if mda_cfg:
+                        mda_boundary = await run_in_threadpool(detector.detect_section, mda_cfg, max_pages=MAX_PAGES)
+                    
+                    if mda_boundary:
+                        mda_start = mda_boundary.start_page
+                        mda_end = mda_boundary.end_page
+                        # Extract the detected pages using pymupdf
+                        mda_pages_data, _ = await run_in_threadpool(
+                            extract_text_with_pymupdf,
+                            tmp_path, pages_to_extract=list(range(mda_start, mda_end + 1)))
+                        mda_text = get_full_text(mda_pages_data)
+                        logger.info(f"MD&A extracted: pages {mda_start}-{mda_end}, {len(mda_text)} chars")
+                    
+                    mda_insights = {"status": "not_run"}
+                    if mda_text:
+                        mda_analyzer = MDAAnalyzer()
+                        mda_insights = await run_in_threadpool(mda_analyzer.analyze, mda_text)
+                        logger.info(f"[{elapsed()}] MDAAnalyzer done — sentiment={mda_insights.get('sentiment_score')}, risk={mda_insights.get('risk_intensity')}, headwinds={len(mda_insights.get('extracted_headwinds', []))}")
+                    
+                    if mda_insights.get("status") == "success" and mda_insights.get("sentiment_score", 0) < -0.01:
+                        if "P-16" not in scan_dict["triggered_rules"]:
+                            scan_dict["triggered_rules"].append("P-16")
+                        logger.warning(f"P-16 TRIGGERED: negative MD&A sentiment {mda_insights['sentiment_score']}")
+                except Exception as e:
+                    logger.exception(f"MDAAnalyzer failed for {year}: {e}")
+                    mda_insights = {"status": "error"}
+
                 # ── Store per-year result ────────────────────────────────────────────
                 per_year_scans[year] = {
                     "status": "success",
@@ -367,6 +412,7 @@ async def analyze_report(request: Request):
                     "emphasis_findings":         scan_dict.get("emphasis_findings", []),
                     "extracted_figures":         extracted_figures,
                     "news_data":                 news_data,
+                    "mda_insights":              mda_insights,
                 }
             
             except Exception as exc:
@@ -428,6 +474,21 @@ async def analyze_report(request: Request):
         
         if mca_data and mca_data.triggered_rules:
             for rule in mca_data.triggered_rules:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+        
+        # ── Merge NewsScanner triggered_rules (P-13) ─────────────────────────
+        news_data_ref = latest_scan.get("news_data")
+        if news_data_ref and news_data_ref.get("triggered_rules"):
+            logger.info(f"NewsScanner triggered_rules: {news_data_ref['triggered_rules']}")
+            for rule in news_data_ref["triggered_rules"]:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+        
+        # ── Merge ECourtsScanner triggered_rules (P-15) ──────────────────────
+        if ecourts_data and ecourts_data.triggered_rules:
+            logger.info(f"ECourtsScanner triggered_rules: {ecourts_data.triggered_rules}")
+            for rule in ecourts_data.triggered_rules:
                 if rule not in all_triggered_rules:
                     all_triggered_rules.append(rule)
                     
@@ -497,6 +558,13 @@ async def analyze_report(request: Request):
             },
             "mca": mca_dict,
             "site_visit_scan": site_visit_scan,
+            "ecourts": {
+                "cases_found": ecourts_data.cases_found if ecourts_data else 0,
+                "high_risk_cases": ecourts_data.high_risk_cases if ecourts_data else 0,
+                "findings": ecourts_data.findings if ecourts_data else [],
+                "triggered_rules": ecourts_data.triggered_rules if ecourts_data else [],
+                "source": "eCourts Public API"
+            },
             "methodology": (
                 "All findings are extracted by deterministic regex — zero LLM calls. "
                 "Every snippet is traceable to the original PDF text. "

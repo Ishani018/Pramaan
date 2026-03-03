@@ -43,7 +43,9 @@ RULE_DISPLAY_NAMES = {
     "P-10": "AUDIT-03: Auditor Rotation",
     "P-11": "RATING-01: Sub-Investment Grade",
     "P-12": "RATING-02: Downgrade/Default",
-    "P-13": "MEDIA-01: Adverse Media"
+    "P-13": "MEDIA-01: Adverse Media",
+    "P-15": "LEGAL-01: Active Court Proceedings",
+    "P-16": "MGMT-01: Negative Management Sentiment"
 }
 
 def _rgb(doc_color: tuple):
@@ -231,6 +233,18 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     lits = karza.get("active_litigations", [])
     _kv_row(c2_tbl, "Litigation History", "; ".join(lits) if lits else "No severe litigations detected", WARN_AMBER if lits else SUCCESS_GREEN)
     
+    # eCourts
+    ecourts = data.get("ecourts", {})
+    ec_cases = ecourts.get("cases_found", 0)
+    ec_high = ecourts.get("high_risk_cases", 0)
+    _kv_row(c2_tbl, "eCourts Cases Found", str(ec_cases))
+    _kv_row(c2_tbl, "High-Risk Cases", f"{ec_high} [LEGAL-01]" if ec_high > 0 else "0", DANGER_RED if ec_high > 0 else SUCCESS_GREEN)
+    _kv_row(c2_tbl, "Source", ecourts.get("source", "eCourts Public API [LIVE]"))
+    ec_findings = ecourts.get("findings", [])
+    if ec_findings:
+        for f in ec_findings:
+            _kv_row(c2_tbl, "Finding", f"{f.get('signal', '')} | {f.get('court', '')}", DANGER_RED)
+    
     # NewsScanner
     adverse = news_data.get("adverse_media_detected", False)
     _kv_row(c2_tbl, "Adverse Media (NewsScanner)", "⚠ YES [MEDIA-01]" if adverse else "✓ Clear", DANGER_RED if adverse else SUCCESS_GREEN)
@@ -336,6 +350,31 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     _kv_row(c6_tbl, "CARO Findings", "⚠ Default True [AUDIT-01]" if caro else "✓ Clear", DANGER_RED if caro else SUCCESS_GREEN)
     _kv_row(c6_tbl, "Emphasis of Matter", "⚠ Flaged [AUDIT-02]" if eom else "✓ Clear", WARN_AMBER if eom else SUCCESS_GREEN)
     doc.add_paragraph()
+
+    mda = data.get("mda_insights", {})
+    if mda.get("status") == "success":
+        _add_sub_header(doc, "MD&A SENTIMENT ANALYSIS (Loughran-McDonald Financial NLP)")
+        mda_tbl = _create_styled_table(doc, 0, 2)
+        mda_tbl.columns[0].width = Inches(2.5)
+        
+        score = mda.get("sentiment_score", 0)
+        risk = mda.get("risk_intensity", 0)
+        metrics = mda.get("metrics", {})
+        
+        _kv_row(mda_tbl, "Sentiment Score", f"{score} (positive = confident, negative = distressed)")
+        _kv_row(mda_tbl, "Risk Intensity", f"{risk}")
+        _kv_row(mda_tbl, "Negative Words", str(metrics.get("negative_words", 0)))
+        _kv_row(mda_tbl, "Positive Words", str(metrics.get("positive_words", 0)))
+        _kv_row(mda_tbl, "Uncertainty Words", str(metrics.get("uncertainty_words", 0)))
+        _kv_row(mda_tbl, "Methodology", mda.get("methodology", "Loughran-McDonald Dictionary"))
+        doc.add_paragraph()
+        
+        hw = mda.get("extracted_headwinds", [])
+        if hw:
+            _add_body_para(doc, "KEY RISK SENTENCES FROM MD&A:", bold=True).runs[0].font.color.rgb = _rgb(WARN_AMBER)
+            for h in hw:
+                doc.add_paragraph(h, style="List Bullet")
+            doc.add_paragraph()
 
     # ── SECTION 7: RISK RULE MATRIX ───────────────────────────────────────────
     _add_section_header(doc, "SECTION 7: RISK RULE MATRIX")

@@ -35,7 +35,9 @@ export const RULE_DISPLAY_NAMES = {
     "P-10": "AUDIT-03: Auditor Rotation",
     "P-11": "RATING-01: Sub-Investment Grade",
     "P-12": "RATING-02: Downgrade/Default",
-    "P-13": "MEDIA-01: Adverse Media"
+    "P-13": "MEDIA-01: Adverse Media",
+    "P-15": "LEGAL-01: Active Court Proceedings",
+    "P-16": "MGMT-01: Negative Management Sentiment"
 }
 
 // ── Client-side penalty orchestrator (mirrors backend logic) ─────────────────
@@ -52,6 +54,7 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
     if (restatementData?.restatements_detected) triggered.push('P-09')
     if (restatementData?.auditor_changed) triggered.push('P-10')
     if (pdfScan?.news_data?.adverse_media_detected) triggered.push('P-13')
+    if (pdfScan?.mda_insights?.status === 'success' && pdfScan.mda_insights.sentiment_score < -0.01) triggered.push('P-16')
     const RULES = {
         'P-01': { name: RULE_DISPLAY_NAMES['P-01'], bps: 100, cut: 10, manual: false, trigger: 'GSTR-2A vs 3B mismatch > 15% (Perfios)' },
         'P-03': { name: RULE_DISPLAY_NAMES['P-03'], bps: 150, cut: 20, manual: false, trigger: 'CARO 2020 Clause (vii) / auditor qualification' },
@@ -60,6 +63,8 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
         'P-09': { name: RULE_DISPLAY_NAMES['P-09'], bps: 200, cut: 40, manual: true, trigger: 'Prior year financial comparative figures restated by >2%' },
         'P-10': { name: RULE_DISPLAY_NAMES['P-10'], bps: 75, cut: 10, manual: true, trigger: 'Change in statutory auditor detected across reporting periods' },
         'P-13': { name: RULE_DISPLAY_NAMES['P-13'], bps: 50, cut: 0, manual: true, trigger: 'NewsScanner found high-severity red flags (fraud, ED raid, etc.)' },
+        'P-15': { name: RULE_DISPLAY_NAMES['P-15'], bps: 100, cut: 15, manual: true, trigger: 'High-risk court cases found via eCourts (NCLT/winding up/fraud/DRT)' },
+        'P-16': { name: RULE_DISPLAY_NAMES['P-16'], bps: 50, cut: 5, manual: false, trigger: 'MD&A sentiment score negative per Loughran-McDonald lexicon' },
     }
 
     let rate = BASE_RATE
@@ -104,8 +109,9 @@ const TABS = [
     { id: 'waterfall', label: 'Waterfall', icon: BarChart2 },
     { id: 'heatmap', label: 'Evidence', icon: Map },
     { id: 'network', label: 'Network', icon: Network },
-    { id: 'adverse-media', label: 'Media', icon: ShieldAlert },
+    { id: 'adverse-media', label: 'Media & Legal', icon: ShieldAlert },
     { id: 'restatement', label: 'Restatement', icon: TrendingDown },
+    { id: 'sentiment', label: 'Sentiment', icon: Eye },
 ]
 
 const ALL_RULES = [
@@ -117,6 +123,8 @@ const ALL_RULES = [
     { id: 'P-09', label: RULE_DISPLAY_NAMES['P-09'], severity: 'CRITICAL' },
     { id: 'P-10', label: RULE_DISPLAY_NAMES['P-10'], severity: 'HIGH' },
     { id: 'P-13', label: RULE_DISPLAY_NAMES['P-13'], severity: 'HIGH' },
+    { id: 'P-15', label: RULE_DISPLAY_NAMES['P-15'], severity: 'HIGH' },
+    { id: 'P-16', label: RULE_DISPLAY_NAMES['P-16'] },
 ]
 
 function StatusBadge({ status, message }) {
@@ -730,13 +738,125 @@ export default function App() {
                                     <NetworkAnalysis />
                                 )}
                                 {activeTab === 'adverse-media' && (
-                                    <AdverseMediaPanel newsData={pdfResult?.news} />
+                                    <div className="flex flex-col gap-6">
+                                        <AdverseMediaPanel newsData={pdfResult?.news} />
+
+                                        {/* eCourts Litigation Scan */}
+                                        <div className="border-[3px] border-ink bg-paper p-6 relative">
+                                            <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
+                                                <div className="w-2 h-2 bg-ink" />
+                                                ECOURTS — LITIGATION SCAN
+                                            </div>
+
+                                            {(() => {
+                                                const ec = pdfResult?.ecourts;
+                                                if (!ec || ec.cases_found === 0) {
+                                                    return (
+                                                        <div className="mt-2 text-sm font-mono text-muted">No cases found via eCourts public API.</div>
+                                                    );
+                                                }
+                                                return (
+                                                    <div className="mt-2 flex flex-col gap-4">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="border-2 border-border p-3">
+                                                                <div className="text-xs font-mono font-bold text-muted uppercase">CASES FOUND</div>
+                                                                <div className="text-2xl font-mono font-bold text-ink">{ec.cases_found}</div>
+                                                            </div>
+                                                            <div className="border-2 border-border p-3">
+                                                                <div className="text-xs font-mono font-bold text-muted uppercase">HIGH-RISK</div>
+                                                                <div className={`text-2xl font-mono font-bold ${ec.high_risk_cases > 0 ? 'text-red' : 'text-green'}`}>{ec.high_risk_cases}</div>
+                                                            </div>
+                                                            {ec.triggered_rules?.includes('P-15') && (
+                                                                <div className="px-3 py-1 border-[3px] border-red text-red font-mono font-bold uppercase text-xs transform -rotate-1">
+                                                                    P-15 TRIGGERED — LEGAL-01
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {ec.findings && ec.findings.length > 0 && (
+                                                            <div className="flex flex-col gap-3">
+                                                                {ec.findings.map((f, idx) => (
+                                                                    <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
+                                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
+                                                                        <div className="font-mono text-xs font-bold text-red uppercase mb-1">[{f.severity}]</div>
+                                                                        <p className="font-serif text-ink text-sm leading-relaxed">{f.signal}</p>
+                                                                        <p className="font-mono text-xs text-muted mt-1">Court: {f.court || 'N/A'} | Filed: {f.filing_date || 'N/A'}</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            <div className="mt-4 text-[10px] font-mono text-muted uppercase tracking-widest border-t border-border pt-2">
+                                                eCourts Public API [LIVE]
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
                                 {activeTab === 'restatement' && (
                                     <RestatementAnalysis
                                         restatementData={pdfResult?.restatement_data}
                                         pdfResult={pdfResult}
                                     />
+                                )}
+                                {activeTab === 'sentiment' && pdfResult?.mda_insights?.status === "success" && (
+                                    <div className="flex flex-col gap-6">
+                                        <div className="border-[3px] border-ink bg-paper p-6 relative">
+                                            <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
+                                                <div className="w-2 h-2 bg-ink" />
+                                                MD&A SENTIMENT ANALYSIS
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-6 mt-2">
+                                                <div className="border-2 border-border p-4">
+                                                    <div className="text-xs font-mono font-bold text-muted uppercase mb-1">SENTIMENT SCORE</div>
+                                                    <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.sentiment_score < -0.01 ? 'text-red' :
+                                                        pdfResult.mda_insights.sentiment_score > 0.01 ? 'text-green' : 'text-[#D4A017]'
+                                                        }`}>
+                                                        {pdfResult.mda_insights.sentiment_score}
+                                                    </div>
+                                                </div>
+                                                <div className="border-2 border-border p-4">
+                                                    <div className="text-xs font-mono font-bold text-muted uppercase mb-1">RISK INTENSITY</div>
+                                                    <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.risk_intensity > 0.04 ? 'text-red' :
+                                                        pdfResult.mda_insights.risk_intensity >= 0.02 ? 'text-[#D4A017]' : 'text-green'
+                                                        }`}>
+                                                        {pdfResult.mda_insights.risk_intensity}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="border-[3px] border-border bg-[#F8F9FA] p-6">
+                                            <h3 className="font-display font-bold text-ink uppercase tracking-wide text-sm mb-4">KEY RISK SENTENCES DETECTED</h3>
+                                            <div className="flex flex-col gap-3">
+                                                {pdfResult.mda_insights.extracted_headwinds && pdfResult.mda_insights.extracted_headwinds.length > 0 ? (
+                                                    pdfResult.mda_insights.extracted_headwinds.map((sentence, idx) => (
+                                                        <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
+                                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
+                                                            <p className="font-serif text-ink text-sm leading-relaxed">{sentence}</p>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-sm font-mono text-muted">No material headwinds detected.</div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 text-[10px] font-mono text-muted uppercase tracking-widest text-center border-t border-border pt-4">
+                                            METHODOLOGY: LOUGHRAN-McDONALD FINANCIAL SENTIMENT DICTIONARY — ZERO LLM CALLS
+                                        </div>
+                                    </div>
+                                )}
+                                {activeTab === 'sentiment' && pdfResult?.mda_insights?.status !== "success" && (
+                                    <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-border bg-paper/50">
+                                        <div className="w-12 h-12 flex items-center justify-center bg-white border-2 border-border mb-4">
+                                            <Eye size={24} className="text-muted" />
+                                        </div>
+                                        <h3 className="font-display font-bold text-ink uppercase tracking-wide">MD&A Not Found</h3>
+                                        <p className="text-sm font-serif text-muted mt-2 text-center max-w-md">The Management Discussion & Analysis section could not be located or contained insufficient text for evaluation.</p>
+                                    </div>
                                 )}
                             </div>
 
