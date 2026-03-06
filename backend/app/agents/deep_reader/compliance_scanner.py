@@ -11,12 +11,28 @@ Scans the extracted text of the Independent Auditor's Report and its Annexure fo
 Every match returns the surrounding context snippet (±200 chars) for full traceability.
 The scanner never invents findings — it only reports what is explicitly stated.
 """
+import sys
 import logging
 import re
 from dataclasses import dataclass, field
 from typing import List
 
+# 1. Get the logger for this specific file
 logger = logging.getLogger(__name__)
+
+# 2. Force the log level to INFO
+logger.setLevel(logging.INFO)
+
+# 3. If Uvicorn stripped the handlers, explicitly add our own console handler
+if not logger.handlers:
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+# 4. Prevent logs from bubbling up to the hijacked root logger (prevents double-printing)
+logger.propagate = False
 
 
 # ---------------------------------------------------------------------------

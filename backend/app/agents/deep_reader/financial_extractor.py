@@ -9,115 +9,178 @@ import re
 import logging
 from typing import Dict, Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
+
+def detect_unit_and_normalize(value: float, context: str) -> tuple[float, str]:
+    ctx = context.lower()
+    if any(x in ctx for x in ['lakh crore', 'lakh cr']):
+        return round(value * 100000, 2), 'Lakh Cr'
+    if re.search(r'\b(bn|billion)\b', ctx):
+        return round(value * 100, 2), 'Bn→Cr'
+    if re.search(r'\b(crore|cr)\b', ctx):
+        return round(value, 2), 'Cr'
+    if re.search(r'\b(mn|million)\b', ctx):
+        return round(value / 100, 2), 'Mn→Cr'
+    return round(value, 2), 'unknown'
+
+FIELD_PATTERNS = {
+    "Revenue": {
+        "patterns": [
+            # Plain table: "Revenue from operations  1,223.16"
+            r'revenue\s+from\s+operations\s+\d*\s*([\d,]{4,}\.?\d{2})',
+            # Narrative: "Revenue stood at ₹ 435.7 billion"
+            r'revenue\s+stood\s+at\s+[`₹$]?\s*([\d,]+\.?\d*)\s*(bn|billion|cr|crore|mn|million)',
+            # Narrative: "total revenue of ₹ X Cr"  
+            r'total\s+revenue\s+(?:of|was|is|:)\s*[`₹$]?\s*([\d,]+\.?\d*)\s*(bn|billion|cr|crore|mn|million)',
+            # Income statement table line — 5+ digit number only
+            r'revenue\s+from\s+operations\s+(?:\d{1,3}\s+)?([\d,]{5,}\.?\d*)',
+        ],
+        "exclude_patterns": [
+            r'decreased\s+by',
+            r'increased\s+by',
+            r'(?:decreased|increased|decline|growth)\s+(?:by\s+)?[`₹]?\s*[\d,]+',
+            r'(\d+\.?\d*)\s*%',
+        ]
+    },
+    "EBITDA": {
+        "patterns": [
+            r'(?:cash\s+)?ebitda[\s\S]{0,80}?([\d,]+\.?\d*)\s*(?:mn|cr|bn|billion|crore)',
+            r'(?:cash\s+)?ebitda\s+(?:stood\s+at\s+)?[`₹]?\s*([\d,]+\.?\d*)',
+            r'operating\s+(?:profit|ebitda)[\s\S]{0,60}?([\d,]+\.?\d*)\s*(?:mn|cr|bn)',
+        ],
+        "exclude_patterns": [
+            r'ebitda\s+margin[\s\S]{0,30}?(\d+\.?\d*)\s*%',
+        ]
+    },
+    "PAT": {
+        "patterns": [
+            # Income statement: profit/(loss) for the year
+            # Must have 4+ digit number — not "49"
+            r'(?:profit|loss)\s*[/\(]?\s*(?:loss)?\s*\)?\s+for\s+the\s+(?:year|period)[\s\S]{0,80}?(\([\d,]{4,}\.?\d*\)|[\d,]{4,}\.?\d*)',
+            # Net loss/profit after tax with unit
+            r'net\s+(?:profit|loss)\s+after\s+tax[\s\S]{0,60}?[`₹]?\s*(\([\d,]{4,}\.?\d*\)|[\d,]{4,}\.?\d*)\s*(?:mn|cr|bn)',
+        ],
+        "exclude_patterns": [
+            r'(\d+)\s+percent',
+            r'(\d+\.?\d*)\s*(?:%|per\s*cent)',
+        ]
+    },
+    "Total Debt": {
+        "patterns": [
+            r'total\s+(?:borrowings?|debt)[\s\S]{0,80}?[`₹]?\s*([\d,]+\.?\d*)\s*(?:mn|cr|bn|crore)',
+            r'(?:long.term\s+borrowings?[\s\S]{0,30}?short.term\s+borrowings?|total\s+debt)[\s\S]{0,60}?[`₹]?\s*([\d,]+\.?\d*)',
+            r'total\s+financial\s+liabilities[\s\S]{0,60}?([\d,]+\.?\d*)',
+        ],
+        "exclude_patterns": []
+    },
+    "Net Worth": {
+        "patterns": [
+            # "total equity stood at ₹ (703,202) Mn"
+            # Handles bracket notation for negative equity
+            r'total\s+equity[\s\S]{0,60}?[`₹]?\s*(\([\d,]{4,}\.?\d*\)|[\d,]{4,}\.?\d*)\s*(?:mn|cr|bn|crore|million)?',
+            # shareholders funds
+            r'shareholders[\'s]*\s+(?:fund|equity)[\s\S]{0,60}?[`₹]?\s*(\([\d,]+\.?\d*\)|[\d,]{4,}\.?\d*)',
+            # net worth with 4+ digits
+            r'net\s+worth[\s\S]{0,60}?[`₹]?\s*(\([\d,]{4,}\.?\d*\)|[\d,]{4,}\.?\d*)',
+        ],
+        "exclude_patterns": [
+            r'(\d+\.?\d*)\s*%',
+            r'increased\s+by\s+\d+',
+        ]
+    }
+}
 
 class FinancialExtractor:
     """
     Extracts high-level financials and metadata purely via deterministic regex.
     """
     def __init__(self):
-        # Numeric extraction helper:
-        # Group 1 captures the first number (current year)
-        # Group 2 optionally captures a second number immediately following (previous year)
-        num_core = r'-?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?'
-        self.num_pattern = rf'({num_core})(?:[\s\n]+({num_core}))?'
-        
-        # Look for words like Crore, Cr, Millions, etc to capture the unit
-        self.unit_pattern = r'(?i)\b(crores?|cr\.?|millions?|lakhs?|inr|rs\.?|₹)\b'
-        
-        self.patterns = {
-            "Revenue": [
-                r'(?i)revenue\s+from\s+operations.*?[:\s]+(?:rs\.?|inr|₹)?\s*' + self.num_pattern,
-                r'(?i)total\s+income.*?[:\s]+(?:rs\.?|inr|₹)?\s*' + self.num_pattern
-            ],
-            "EBITDA": [
-                r'(?i)(?:ebitda|operating\s+profit).*?[:\s]+(?:rs\.?|inr|₹)?\s*' + self.num_pattern
-            ],
-            "PAT": [
-                r'(?i)(?:pat|profit\s+after\s+tax|net\s+profit\s+for\s+the\s+period/year|net\s+profit).*?[:\s]+(?:rs\.?|inr|₹)?\s*' + self.num_pattern
-            ],
-            "Total Debt": [
-                r'(?i)(?:total\s+debt|borrowings|total\s+borrowings).*?[:\s]+(?:rs\.?|inr|₹)?\s*' + self.num_pattern
-            ],
-            "Net Worth": [
-                r'(?i)(?:net\s+worth|total\s+equity|shareholders?\s+funds?).*?[:\s]+(?:rs\.?|inr|₹)?\s*' + self.num_pattern
-            ]
-        }
-        
         # Auditor firm name usually follows "For " right before the partner signature
         self.auditor_pattern = r'(?i)for\s+([a-zA-Z\s&,\.]+chartered\s+accountants|[a-zA-Z\s&,\.]+associates|m/s[\s\.][a-zA-Z\s&,\.]+)'
 
     def extract(self, text: str, year: str) -> Dict[str, Optional[Dict[str, Any]]]:
-        """
-        Scan the text for each figure and return a structured dictionary.
-        Returns None for keys that couldn't be found.
-        """
-        results = {
-            "Revenue": None,
-            "EBITDA": None,
-            "PAT": None,
-            "Total Debt": None,
-            "Net Worth": None,
-            "Auditor Name": None
-        }
-
-        # Normalize text to collapse excessive whitespace for regex matching
-        norm_text = re.sub(r'\s+', ' ', text)
-
-        for label, regex_list in self.patterns.items():
-            for regex in regex_list:
-                match = re.search(regex, norm_text)
-                if match:
-                    raw_val = match.group(1).replace(',', '').replace(' ', '')
-                    raw_prev_val = match.group(2).replace(',', '').replace(' ', '') if match.group(2) else None
-                    
+        full_text = text
+        results = {}
+        
+        fin_section = self._get_financial_section(full_text)
+        
+        for field, config in FIELD_PATTERNS.items():
+            best = None
+            best_raw = None
+            best_confidence = 0
+            best_snippet = ""
+            best_unit = "unknown"
+            
+            for pattern in config["patterns"]:
+                matches = re.finditer(pattern, fin_section, re.IGNORECASE)
+                
+                for m in matches:
+                    raw_val_str = m.group(1).replace(',', '')
                     try:
-                        val = float(raw_val)
-                        prev_val = float(raw_prev_val) if raw_prev_val else None
+                        raw_val = float(raw_val_str)
                     except ValueError:
-                        continue # Failed to parse as float, try next pattern or move on
+                        continue
                     
-                    # Try to look around the match to find the unit
-                    start_idx = max(0, match.start() - 50)
-                    end_idx = min(len(norm_text), match.end() + 50)
-                    surrounding = norm_text[start_idx:end_idx].strip()
+                    if raw_val < 10:
+                        continue
                     
-                    unit = "unknown"
-                    unit_match = re.search(self.unit_pattern, surrounding)
-                    if unit_match:
-                        unit = unit_match.group(1).lower().replace('.', '')
-                        if unit in ['cr', 'crores', 'crore']:
-                            unit = 'crore'
-                        elif unit in ['lakh', 'lakhs']:
-                            unit = 'lakh'
-                        elif unit in ['million', 'millions']:
-                            unit = 'million'
-                            
-                    res_dict = {
-                        "label": label,
-                        "value": val,
-                        "unit": unit,
-                        "snippet": f"...{surrounding}...",
-                        "year": year
-                    }
-                    if prev_val is not None:
-                        res_dict["previous_value"] = prev_val
-                        
-                    results[label] = res_dict
-                    break # Found it, stop trying fallback patterns for this label
-
-        # Extract auditor
+                    context_window = full_text[max(0, m.start()-100):m.end()+100]
+                    excluded = False
+                    for excl in config.get("exclude_patterns", []):
+                        if re.search(excl, context_window, re.IGNORECASE):
+                            excl_match = re.search(excl, m.group(0), re.IGNORECASE)
+                            if excl_match:
+                                excluded = True
+                                break
+                    
+                    if excluded:
+                        continue
+                    
+                    normalized, unit = detect_unit_and_normalize(raw_val, context_window)
+                    
+                    confidence = 0
+                    if unit != 'unknown': confidence += 40
+                    if re.search(r'[`₹\$]', context_window): confidence += 20
+                    if 10 <= normalized <= 1000000: confidence += 20
+                    if re.search(r'page|p\.\d+|\d{1,3}\s*$', context_window, re.IGNORECASE): confidence += 10
+                    
+                    if confidence > best_confidence:
+                        best = normalized
+                        best_raw = raw_val
+                        best_confidence = confidence
+                        # Snippet must come from fin_section, not full_text
+                        snippet_start = max(0, m.start()-80)
+                        best_snippet = "..." + fin_section[snippet_start:m.end()+80] + "..."
+                        best_unit = unit
+            
+            if best is not None:
+                if best_confidence >= 70: conf_label = "HIGH"
+                elif best_confidence >= 40: conf_label = "MEDIUM"
+                else: conf_label = "LOW"
+                
+                results[field] = {
+                    "label": field,
+                    "value": best,
+                    "raw_value": best_raw,
+                    "unit": best_unit,
+                    "unit_normalized": "Cr",
+                    "confidence": conf_label,
+                    "confidence_score": best_confidence,
+                    "snippet": best_snippet,
+                    "year": year
+                }
+                logger.info(f"FinancialExtractor: {field}={best} Cr [{conf_label} conf={best_confidence}] unit={best_unit}")
+        
+        # Original Auditor Extraction logic
+        norm_text = re.sub(r'\s+', ' ', text)
         aud_match = re.search(self.auditor_pattern, norm_text)
         if aud_match:
             firm_name = aud_match.group(1).strip()
-            # Clean up trailing garbage if regex over-captured
             firm_name = re.sub(r'(?i)(?:firm|registration).*$', '', firm_name).strip(' ,.')
-            # Limit length just in case
             if len(firm_name) < 100:
                 start_idx = max(0, aud_match.start() - 30)
                 end_idx = min(len(norm_text), aud_match.end() + 30)
                 surrounding = norm_text[start_idx:end_idx].strip()
-                
                 results["Auditor Name"] = {
                     "label": "Auditor Name",
                     "value": firm_name,
@@ -125,5 +188,34 @@ class FinancialExtractor:
                     "snippet": f"...{surrounding}...",
                     "year": year
                 }
-
+                
         return results
+
+    def _get_financial_section(self, full_text: str) -> str:
+        text_lower = full_text.lower()
+        markers = [
+            "statement of profit and loss",
+            "profit and loss account", 
+            "statement of income",
+            "income statement",
+            "consolidated statement of",
+        ]
+        for marker in markers:
+            idx = text_lower.find(marker)
+            if idx != -1:
+                # Skip TOC — find second occurrence
+                idx2 = text_lower.find(marker, idx + 500)
+                if idx2 != -1:
+                    idx = idx2
+                logger.info(
+                    f"FinancialExtractor: P&L at "
+                    f"idx={idx} via '{marker}'")
+                logger.info(
+                    f"P&L preview: "
+                    f"'{full_text[idx:idx+200]}'")
+                return full_text[idx:idx+20000]
+        
+        logger.warning(
+            "FinancialExtractor: P&L section NOT FOUND "
+            "— falling back to full text")
+        return full_text

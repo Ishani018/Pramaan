@@ -137,16 +137,67 @@ async def mock_network_graph():
                 "type": "shell",
                 "amount_cr": 4.5,
             },
+            {
+                "id": "dir1",
+                "label": "Rahul Sharma\n(Director)",
+                "type": "director",
+                "amount_cr": 0,
+            },
+            {
+                "id": "dir2",
+                "label": "Amit Desai\n(Director)",
+                "type": "director",
+                "amount_cr": 0,
+            },
         ],
         "links": [
             {"source": "acme",   "target": "vertex", "value": 5.0, "label": "₹5.0 Cr"},
             {"source": "vertex", "target": "nova",   "value": 4.8, "label": "₹4.8 Cr"},
             {"source": "nova",   "target": "acme",   "value": 4.5, "label": "₹4.5 Cr"},
+            {"source": "dir1",   "target": "acme",   "value": 0.5, "label": "MD"},
+            {"source": "dir1",   "target": "nova",   "value": 0.5, "label": "Beneficiary"},
+            {"source": "dir2",   "target": "vertex", "value": 0.5, "label": "Promoter"},
         ],
         "metadata": {
             "data_freshness": "2024-01-15",
             "rule_triggered": "P-06",
             "trigger_condition": "circular_trading_detected == true",
             "loop_value_cr": 5.0,
+        },
+    }
+
+
+@router.get(
+    "/cibil",
+    summary="CIBIL Commercial – Credit Bureau Score Mock",
+    description=(
+        "Simulates a CIBIL Commercial credit bureau response. "
+        "Returns a credit score, rating, DPD history, and outstanding facilities."
+    ),
+)
+async def mock_cibil():
+    """
+    Fixture: Moderate credit score with minor DPD history.
+    """
+    return {
+        "status": "success",
+        "provider": "CIBIL Commercial (mock)",
+        "entity": _last_entity["name"],
+        "cin": _last_entity["cin"],
+        "credit_score": 72,
+        "rating": "BB+",
+        "score_range": "1–100",
+        "dpd_30_count": 2,
+        "dpd_60_count": 0,
+        "dpd_90_count": 0,
+        "suit_filed_amount_cr": 3.5,
+        "total_credit_facilities": 4,
+        "total_outstanding_cr": 12.8,
+        "overdue_amount_cr": 0.8,
+        "oldest_account_age_years": 8,
+        "metadata": {
+            "data_freshness": "2024-01-20",
+            "bureau": "TransUnion CIBIL",
+            "report_type": "Commercial Credit Report (CCR)",
         },
     }

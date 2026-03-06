@@ -15,7 +15,9 @@ Pipeline:
 Returns boolean flags (caro_default_found, adverse_opinion_found) and
 full traceability snippets so every finding can be walked back to the PDF.
 """
+import sys
 import logging
+import asyncio
 import tempfile
 import uuid
 from pathlib import Path
@@ -35,14 +37,35 @@ from app.agents.orchestrator import orchestrate_decision, BASE_RATE_PCT, BASE_LI
 from app.agents.deep_reader.text_cleaner import clean_text
 from app.api.v1.external_mocks import _last_entity
 from app.agents.external.news_scanner import NewsScanner
-from app.agents.primary.site_visit_scanner import SiteVisitScanner
+from app.agents.deep_reader.site_visit_analyzer import SiteVisitAnalyzer
 from app.agents.external.mca_scanner import MCAScanner
 from app.agents.deep_reader.mda_analyzer import MDAAnalyzer
+from app.agents.deep_reader.shareholding_scanner import ShareholdingScanner
+from app.agents.deep_reader.rating_extractor import RatingExtractor
+from app.agents.deep_reader.bank_statement_analyzer import BankStatementAnalyzer
+from app.agents.external.sector_benchmark import SectorBenchmarkAssessor
+from app.agents.deep_reader.collateral_assessor import CollateralAssessor
 from app.agents.external.ecourts_scanner import ECourtsScanner
 import os
 from app.core.config import settings
 
+# 1. Get the logger for this specific file
 logger = logging.getLogger(__name__)
+
+# 2. Force the log level to INFO
+logger.setLevel(logging.INFO)
+
+# 3. If Uvicorn stripped the handlers, explicitly add our own console handler
+if not logger.handlers:
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+# 4. Prevent logs from bubbling up to the hijacked root logger (prevents double-printing)
+logger.propagate = False
+
 
 router = APIRouter()
 
@@ -99,6 +122,8 @@ async def analyze_report(request: Request):
         # Initialize default values to avoid UnboundLocalError
         mca_data = None
         ecourts_data = None
+        shareholding_data = None
+        bank_result = None
 
         # Extract all uploaded files (e.g. file_fy24, file_fy23)
         files = {
@@ -238,7 +263,66 @@ async def analyze_report(request: Request):
                     logger.exception(f"FinancialExtractor failed for {year}: {e}")
                     extracted_figures = {}
                 logger.info(f"[{elapsed()}] FinancialExtractor done")
+
+                # ── Step 4.0.1: Collateral Assessor ──────────────────────────────────────────
+                try:
+                    collateral_assessor = CollateralAssessor()
+                    collateral_result = await run_in_threadpool(collateral_assessor.analyze, fin_text)
+                    logger.info(
+                        f"[{elapsed()}] CollateralAssessor done — "
+                        f"findings={len(collateral_result.findings)}, "
+                        f"unsecured={collateral_result.has_unsecured_loans}")
+                except Exception as e:
+                    logger.exception(f"CollateralAssessor failed: {e}")
+                    from app.agents.deep_reader.collateral_assessor import CollateralResult
+                    collateral_result = CollateralResult()
+
+                # Merge collateral rules
+                if collateral_result.triggered_rules:
+                    if "triggered_rules" not in scan_dict:
+                        scan_dict["triggered_rules"] = []
+                    for rule in collateral_result.triggered_rules:
+                        if rule not in scan_dict["triggered_rules"]:
+                            scan_dict["triggered_rules"].append(rule)
+
+                # ── Step 4.1: Rating Extractor ───────────────────────────────────────────
+                try:
+                    rating_extractor = RatingExtractor()
+                    rating_result = await run_in_threadpool(rating_extractor.extract, fin_text)
+                    logger.info(
+                        f"[{elapsed()}] RatingExtractor done — "
+                        f"rating={rating_result.latest_rating}, "
+                        f"agency={rating_result.latest_agency}, "
+                        f"downgrade={rating_result.downgrade_detected}")
+                except Exception as e:
+                    logger.exception(f"RatingExtractor failed: {e}")
+                    from app.agents.deep_reader.rating_extractor import RatingResult
+                    rating_result = RatingResult()
+
+                # Merge rating rules into scan_dict
+                if rating_result.triggered_rules:
+                    if "triggered_rules" not in scan_dict:
+                        scan_dict["triggered_rules"] = []
+                    for rule in rating_result.triggered_rules:
+                        if rule not in scan_dict["triggered_rules"]:
+                            scan_dict["triggered_rules"].append(rule)
                 
+                # ── Step 4.X: Shareholding Scanner ──────────────────────────────────
+                shareholding_scanner = ShareholdingScanner()
+                shareholding_data = await run_in_threadpool(
+                    shareholding_scanner.scan, fin_text)
+                logger.info(
+                    f"[{elapsed()}] ShareholdingScanner done — "
+                    f"promoter={shareholding_data.promoter_holding_pct}%, "
+                    f"pledged={shareholding_data.pledged_pct}%, "
+                    f"govt={shareholding_data.government_holding_pct}%")
+                if shareholding_data.triggered_rules:
+                    if "triggered_rules" not in scan_dict:
+                        scan_dict["triggered_rules"] = []
+                    for rule in shareholding_data.triggered_rules:
+                        if rule not in scan_dict["triggered_rules"]:
+                            scan_dict["triggered_rules"].append(rule)
+
                 # ── Step 4.2: MCA Scan ───────────────────────────────────────────────
                 try:
                     mca_scanner = MCAScanner()
@@ -338,27 +422,49 @@ async def analyze_report(request: Request):
                     from app.api.v1.external_mocks import set_entity, EntityUpdate
                     cin_str = mca_data.cin if (mca_data and getattr(mca_data, "cin", "")) else ("L15122KA2008PLC047538" if "coffee" in entity_name.lower() else "U27100MH2010PTC123456")
                     await set_entity(EntityUpdate(entity_name=entity_name, cin=cin_str))
-
-                    # Use Pydantic settings instead of os.getenv
-                    api_key = settings.NEWS_API_KEY
-                    if api_key:
-                        news_scanner = NewsScanner(api_key=api_key)
-                        news_data = await news_scanner.scan(entity_name)
-                    else:
-                        logger.warning("NEWS_API_KEY is missing or empty. Skipping News Scan.")
-                        news_data = None
                 except Exception as e:
-                    logger.exception(f"NewsScanner failed for {year}: {e}")
-                    news_data = None
-                logger.info(f"[{elapsed()}] NewsScanner done")
+                    logger.exception(f"Error during entity name extraction for {year}: {e}")
+                    entity_name = "Unknown Entity"
 
-                # ── Step 4.55: eCourts Scan ───────────────────────────────────────────
+                # ── Step 4.5: Parallel External Scans ──────────────────────────────────
                 try:
+                    news_scanner = NewsScanner(api_key=settings.NEWS_API_KEY)
                     ecourts_scanner = ECourtsScanner()
-                    ecourts_data = await run_in_threadpool(ecourts_scanner.scan, entity_name)
-                    logger.info(f"[{elapsed()}] ECourtsScanner done — cases={ecourts_data.cases_found}, high_risk={ecourts_data.high_risk_cases}")
+                    
+                    news_result, ecourts_result = await asyncio.gather(
+                        news_scanner.scan(entity_name),
+                        run_in_threadpool(ecourts_scanner.scan, entity_name)
+                    )
+                    
+                    # Manual construction for news_data dict (as expected by frontend/orchestrator)
+                    news_data = {
+                        "entity": entity_name,
+                        "adverse_media_detected": news_result.red_flag_count > 0,
+                        "red_flag_count": news_result.red_flag_count,
+                        "articles_found": news_result.articles_found,
+                        "red_flags": news_result.articles, # Frontend expects red_flags
+                        "triggered_rules": news_result.triggered_rules
+                    }
+                    
+                    if news_result:
+                        logger.info(f"[{elapsed()}] NewsScanner done")
+                        logger.info(f"NewsScanner triggered_rules: {news_result.triggered_rules}")
+                    
+                    if ecourts_result:
+                        logger.info(f"[{elapsed()}] ECourtsScanner done — cases={ecourts_result.cases_found}, high_risk={ecourts_result.high_risk_cases}")
+                        # Convert to dict for serialization
+                        ecourts_data = {
+                            "cases_found": ecourts_result.cases_found,
+                            "high_risk_cases": ecourts_result.high_risk_cases,
+                            "findings": ecourts_result.findings,
+                            "triggered_rules": ecourts_result.triggered_rules
+                        }
+                    else:
+                        ecourts_data = None
+
                 except Exception as e:
-                    logger.exception(f"ECourtsScanner failed for {year}: {e}")
+                    logger.exception(f"Error during parallel scans for {year}: {e}")
+                    news_data = None
                     ecourts_data = None
 
                 # ── Step 4.6: MD&A Analysis ───────────────────────────────────────────
@@ -411,7 +517,9 @@ async def analyze_report(request: Request):
                     "caro_findings":             scan_dict.get("caro_findings", []),
                     "emphasis_findings":         scan_dict.get("emphasis_findings", []),
                     "extracted_figures":         extracted_figures,
+                    "shareholding_data":         shareholding_data,
                     "news_data":                 news_data,
+                    "ecourts_data":              ecourts_data,
                     "mda_insights":              mda_insights,
                 }
             
@@ -452,23 +560,67 @@ async def analyze_report(request: Request):
         
         # ── Step 6: Site Visit Scanner ───────────────────────────────────────────
         try:
-            site_visit_scanner = SiteVisitScanner()
-            site_visit_scan_obj = site_visit_scanner.scan(site_visit_notes)
-            site_visit_scan = {
-                "triggered_rules": site_visit_scan_obj.triggered_rules,
-                "findings": site_visit_scan_obj.findings,
-                "notes_provided": site_visit_scan_obj.notes_provided,
-                "capacity_utilisation_pct": site_visit_scan_obj.capacity_utilisation_pct
-            }
+            site_visit_notes = form.get("site_visit_notes", "")
+            site_visit_analyzer = SiteVisitAnalyzer()
+            site_visit_result = site_visit_analyzer.analyze(site_visit_notes)
+            logger.info(
+                f"[{elapsed()}] SiteVisitAnalyzer done — "
+                f"{len(site_visit_result.findings)} findings, "
+                f"rules={site_visit_result.triggered_rules}")
         except Exception as e:
-            logger.exception(f"SiteVisitScanner failed: {e}")
-            site_visit_scan = {"triggered_rules": [], "findings": [], "notes_provided": False, "capacity_utilisation_pct": None}
+            logger.exception(f"SiteVisitAnalyzer failed: {e}")
+            from app.agents.deep_reader.site_visit_analyzer import SiteVisitResult
+            site_visit_result = SiteVisitResult(raw_notes=form.get("site_visit_notes", ""))
+
+        # ── Step 6.5: Bank Statement Analyzer ──────────────────────────────────────
+        try:
+            bank_csv_file = form.get("bank_csv")
+            if bank_csv_file and getattr(bank_csv_file, "filename", None):
+                bank_csv_content = (await bank_csv_file.read()).decode("utf-8")
+                bank_analyzer = BankStatementAnalyzer()
+                bank_result = bank_analyzer.analyze(bank_csv_content)
+                logger.info(
+                    f"[{elapsed()}] BankStatementAnalyzer done — "
+                    f"{bank_result.total_transactions} txns, "
+                    f"circular={len(bank_result.circular_transactions)}, "
+                    f"rules={bank_result.triggered_rules}")
+            else:
+                from app.agents.deep_reader.bank_statement_analyzer import BankStatementResult
+                bank_result = BankStatementResult()
+        except Exception as e:
+            logger.exception(f"BankStatementAnalyzer failed: {e}")
+            from app.agents.deep_reader.bank_statement_analyzer import BankStatementResult
+            bank_result = BankStatementResult()
         
+        # ── Step 6.8: Sector Benchmark Assessor ──────────────────────────────────
+        try:
+            sector_assessor = SectorBenchmarkAssessor()
+            latest_fin = latest_scan.get("extracted_figures", {})
+            benchmark_result = sector_assessor.analyze(mca_data, latest_fin, {})
+            logger.info(
+                f"[{elapsed()}] SectorBenchmarkAssessor done — "
+                f"sector={benchmark_result.sector_used}, "
+                f"rules={benchmark_result.triggered_rules}")
+        except Exception as e:
+            logger.exception(f"SectorBenchmarkAssessor failed: {e}")
+            from app.agents.external.sector_benchmark import BenchmarkResult
+            benchmark_result = BenchmarkResult()
+
         # ── Step 7: Orchestrate Final Decision ───────────────────────────────────
         
         all_triggered_rules = latest_scan.get("triggered_rules", [])
-        if site_visit_scan and site_visit_scan.get("triggered_rules"):
-            for rule in site_visit_scan["triggered_rules"]:
+        if site_visit_result and site_visit_result.triggered_rules:
+            for rule in site_visit_result.triggered_rules:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+
+        if bank_result and bank_result.triggered_rules:
+            for rule in bank_result.triggered_rules:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+
+        if benchmark_result and benchmark_result.triggered_rules:
+            for rule in benchmark_result.triggered_rules:
                 if rule not in all_triggered_rules:
                     all_triggered_rules.append(rule)
         
@@ -478,17 +630,18 @@ async def analyze_report(request: Request):
                     all_triggered_rules.append(rule)
         
         # ── Merge NewsScanner triggered_rules (P-13) ─────────────────────────
-        news_data_ref = latest_scan.get("news_data")
-        if news_data_ref and news_data_ref.get("triggered_rules"):
-            logger.info(f"NewsScanner triggered_rules: {news_data_ref['triggered_rules']}")
-            for rule in news_data_ref["triggered_rules"]:
+        news_data = latest_scan.get("news_data")
+        if news_data and news_data.get("triggered_rules"):
+            logger.info(f"NewsScanner triggered_rules: {news_data.get('triggered_rules')}")
+            for rule in news_data["triggered_rules"]:
                 if rule not in all_triggered_rules:
                     all_triggered_rules.append(rule)
         
         # ── Merge ECourtsScanner triggered_rules (P-15) ──────────────────────
-        if ecourts_data and ecourts_data.triggered_rules:
-            logger.info(f"ECourtsScanner triggered_rules: {ecourts_data.triggered_rules}")
-            for rule in ecourts_data.triggered_rules:
+        ecourts_data = latest_scan.get("ecourts_data")
+        if ecourts_data and ecourts_data.get("triggered_rules"):
+            logger.info(f"ECourtsScanner triggered_rules: {ecourts_data['triggered_rules']}")
+            for rule in ecourts_data["triggered_rules"]:
                 if rule not in all_triggered_rules:
                     all_triggered_rules.append(rule)
                     
@@ -501,7 +654,7 @@ async def analyze_report(request: Request):
                 content={
                     **latest_scan,
                     "message": "Neither the Independent Auditor's Report nor its Annexure could be located.",
-                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=latest_scan.get("news_data"), site_visit_scan=site_visit_scan, mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None),
+                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=news_data, site_visit_scan={"triggered_rules": site_visit_result.triggered_rules}, mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None),
                     "per_year_scans": per_year_scans,
                     "restatement_data": restatement_data,
                 }
@@ -512,8 +665,8 @@ async def analyze_report(request: Request):
             perfios_data=None,      
             karza_data=None,        
             restatement_data=restatement_data,
-            news_data=latest_scan.get("news_data"),
-            site_visit_scan=site_visit_scan,
+            news_data=news_data,
+            site_visit_scan={"triggered_rules": site_visit_result.triggered_rules},
             mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None
         )
         logger.info(f"[{elapsed()}] Orchestrator done")
@@ -557,19 +710,112 @@ async def analyze_report(request: Request):
                 "adverse_media_detected": False
             },
             "mca": mca_dict,
-            "site_visit_scan": site_visit_scan,
-            "ecourts": {
-                "cases_found": ecourts_data.cases_found if ecourts_data else 0,
-                "high_risk_cases": ecourts_data.high_risk_cases if ecourts_data else 0,
-                "findings": ecourts_data.findings if ecourts_data else [],
-                "triggered_rules": ecourts_data.triggered_rules if ecourts_data else [],
+            "site_visit": {
+                "notes": site_visit_notes,
+                "findings": [
+                    {
+                        "rule_id": f.rule_id,
+                        "rule_name": f.rule_name,
+                        "description": f.description,
+                        "matched_text": f.matched_text,
+                        "severity": f.severity,
+                        "rate_penalty_bps": f.rate_penalty_bps,
+                        "limit_reduction_pct": f.limit_reduction_pct,
+                    }
+                    for f in site_visit_result.findings
+                ],
+                "triggered_rules": site_visit_result.triggered_rules,
+                "total_penalty_bps": site_visit_result.total_penalty_bps,
+                "risk_summary": site_visit_result.risk_summary,
+            },
+            "bank_statement": {
+                "total_transactions": bank_result.total_transactions if bank_result else 0,
+                "total_debits": bank_result.total_debits if bank_result else 0,
+                "total_credits": bank_result.total_credits if bank_result else 0,
+                "avg_monthly_balance": bank_result.avg_monthly_balance if bank_result else 0,
+                "circular_transactions": [
+                    {
+                        "party": ct.party,
+                        "debit_date": ct.debit_date,
+                        "debit_amount": ct.debit_amount,
+                        "credit_date": ct.credit_date,
+                        "credit_amount": ct.credit_amount,
+                        "days_gap": ct.days_gap,
+                    }
+                    for ct in (bank_result.circular_transactions if bank_result else [])
+                ],
+                "cash_spikes": [
+                    {
+                        "date": cs.date,
+                        "amount": cs.amount,
+                        "nearest_filing_date": cs.nearest_filing_date,
+                        "days_before_filing": cs.days_before_filing,
+                    }
+                    for cs in (bank_result.cash_spikes if bank_result else [])
+                ],
+                "top_counterparties": bank_result.top_counterparties if bank_result else [],
+                "findings": bank_result.findings if bank_result else [],
+                "triggered_rules": bank_result.triggered_rules if bank_result else [],
+            },
+            "ecourts": latest_scan.get("ecourts_data") or {
+                "cases_found": 0,
+                "high_risk_cases": 0,
+                "findings": [],
+                "triggered_rules": [],
                 "source": "eCourts Public API"
             },
+            "shareholding": {
+                "promoter_holding_pct": shareholding_data.promoter_holding_pct,
+                "pledged_pct": shareholding_data.pledged_pct,
+                "fii_holding_pct": shareholding_data.fii_holding_pct,
+                "government_holding_pct": shareholding_data.government_holding_pct,
+                "findings": shareholding_data.findings,
+                "triggered_rules": shareholding_data.triggered_rules,
+                "source": shareholding_data.source
+            } if shareholding_data else {},
             "methodology": (
                 "All findings are extracted by deterministic regex — zero LLM calls. "
                 "Every snippet is traceable to the original PDF text. "
                 "Rate and limit penalties are computed by a transparent accumulator model."
-            )
+            ),
+            "benchmark_data": {
+                "sector_used": benchmark_result.sector_used if 'benchmark_result' in dir() else "DEFAULT",
+                "summary": benchmark_result.summary if 'benchmark_result' in dir() else "",
+                "findings": [
+                    {
+                        "metric": f.metric,
+                        "company_value": f.company_value,
+                        "benchmark_value": f.benchmark_value,
+                        "deviation_pct": f.deviation_pct,
+                        "status": f.status
+                    }
+                    for f in (benchmark_result.findings if 'benchmark_result' in dir() else [])
+                ],
+                "triggered_rules": benchmark_result.triggered_rules if 'benchmark_result' in dir() else [],
+            },
+            "collateral": {
+                "has_unsecured_loans": collateral_result.has_unsecured_loans if 'collateral_result' in dir() else False,
+                "is_fully_secured": collateral_result.is_fully_secured if 'collateral_result' in dir() else False,
+                "summary": collateral_result.summary if 'collateral_result' in dir() else "",
+                "findings": [
+                    {
+                        "asset_type": f.asset_type,
+                        "security_type": f.security_type,
+                        "snippet": f.snippet
+                    }
+                    for f in (collateral_result.findings if 'collateral_result' in dir() else [])
+                ],
+                "triggered_rules": collateral_result.triggered_rules if 'collateral_result' in dir() else [],
+            },
+            "ratings": {
+                "latest_agency": rating_result.latest_agency if 'rating_result' in dir() else None,
+                "latest_rating": rating_result.latest_rating if 'rating_result' in dir() else None,
+                "latest_outlook": rating_result.latest_outlook if 'rating_result' in dir() else None,
+                "is_investment_grade": rating_result.is_investment_grade if 'rating_result' in dir() else None,
+                "downgrade_detected": rating_result.downgrade_detected if 'rating_result' in dir() else False,
+                "ratings_found": rating_result.ratings_found if 'rating_result' in dir() else [],
+                "triggered_rules": rating_result.triggered_rules if 'rating_result' in dir() else [],
+            },
         }
     except Exception as inner_e:
         error_detail = traceback.format_exc()

@@ -16,11 +16,12 @@ import axios from 'axios'
 import { AlertTriangle, RefreshCw, Activity } from 'lucide-react'
 
 const NODE_COLORS = {
-    applicant: '#3B82F6',
-    shell: '#EF4444',
+    applicant: '#111111',
+    shell: '#B91C1C',
+    director: '#0F766E', // Dark Teal
 }
-const LINK_COLOR = 'rgba(239,68,68,0.55)'
-const PARTICLE_COLOR = '#F97316'
+const LINK_COLOR = '#555555'
+const PARTICLE_COLOR = '#92400E'
 
 /* Paint custom node: filled circle + two-line label */
 function drawNode(node, ctx, globalScale) {
@@ -48,7 +49,7 @@ function drawNode(node, ctx, globalScale) {
     // Label line 1
     const fontSize = Math.max(10 / globalScale, 4.5)
     ctx.font = `bold ${fontSize}px Inter, sans-serif`
-    ctx.fillStyle = '#F8FAFC'
+    ctx.fillStyle = '#F5F0E4'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(label1, node.x, node.y + r + fontSize * 0.9)
@@ -56,7 +57,7 @@ function drawNode(node, ctx, globalScale) {
     // Label line 2 (italic, smaller, dimmed)
     if (label2) {
         ctx.font = `italic ${fontSize * 0.85}px Inter, sans-serif`
-        ctx.fillStyle = 'rgba(248,250,252,0.55)'
+        ctx.fillStyle = 'rgba(245,240,228,0.55)'
         ctx.fillText(label2, node.x, node.y + r + fontSize * 2.0)
     }
 }
@@ -153,12 +154,13 @@ export default function NetworkAnalysis() {
             {/* ── Legend ── */}
             <div className="flex flex-wrap gap-4 text-xs">
                 {[
-                    { color: '#3B82F6', label: 'Applicant' },
-                    { color: '#EF4444', label: 'Shell Company' },
-                    { color: '#F97316', label: 'Transaction Flow' },
+                    { color: '#111111', label: 'Applicant' },
+                    { color: '#B91C1C', label: 'Shell Company' },
+                    { color: '#0F766E', label: 'Director' },
+                    { color: '#92400E', label: 'Transaction Flow' },
                 ].map(({ color, label }) => (
                     <span key={label} className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full inline-block" style={{ background: color }} />
+                        <span className="w-3 h-3 rounded-full inline-block border border-border" style={{ background: color }} />
                         <span className="text-muted">{label}</span>
                     </span>
                 ))}
@@ -168,7 +170,7 @@ export default function NetworkAnalysis() {
             <div
                 ref={containerRef}
                 className="rounded-2xl overflow-hidden border border-border relative"
-                style={{ background: 'radial-gradient(ellipse at 50% 60%, #0d1a2d 0%, #060d18 100%)', minHeight: 380 }}
+                style={{ backgroundColor: '#111111', minHeight: 380 }}
             >
                 {graphData && (
                     <ForceGraph2D

@@ -15,7 +15,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 
 # ---------------------------------------------------------------------------

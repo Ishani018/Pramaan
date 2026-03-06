@@ -47,10 +47,10 @@ export default function AdverseMediaPanel({ newsData }) {
 
             <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
                 <div className="font-mono text-xs font-bold text-ink mb-2">
-                    Found {newsData.articles_found} articles with {newsData.red_flags.length} red flags for: <span className="bg-ink text-white px-2 py-0.5">{newsData.entity}</span>
+                    Found {newsData?.articles_found ?? 0} articles with {(newsData?.red_flags || []).length} red flags for: <span className="bg-ink text-white px-2 py-0.5">{newsData?.entity || "this entity"}</span>
                 </div>
 
-                {newsData.red_flags.map((flag, idx) => {
+                {(newsData?.red_flags || []).map((flag, idx) => {
                     const isHigh = flag.severity === "HIGH";
                     const severityColor = isHigh ? "bg-red text-white" : "bg-[#D4A017] text-white";
 

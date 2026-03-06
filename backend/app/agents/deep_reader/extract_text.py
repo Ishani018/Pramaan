@@ -10,7 +10,7 @@ import io
 import pdfplumber
 import fitz  # PyMuPDF
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 class PageText:
     def __init__(self, page_number: int, text: str, method: str):

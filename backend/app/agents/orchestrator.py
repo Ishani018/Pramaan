@@ -8,7 +8,26 @@ Deterministic penalty accumulator that aggregates signals from:
 
 Returns a unified decision dict compatible with the frontend Waterfall Chart.
 """
+import sys
+import logging
 from typing import Any, Dict, List
+
+# 1. Get the logger for this specific file
+logger = logging.getLogger(__name__)
+
+# 2. Force the log level to INFO
+logger.setLevel(logging.INFO)
+
+# 3. If Uvicorn stripped the handlers, explicitly add our own console handler
+if not logger.handlers:
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+# 4. Prevent logs from bubbling up to the hijacked root logger (prevents double-printing)
+logger.propagate = False
 
 BASE_RATE_PCT  = 9.0
 BASE_LIMIT_CR  = 10.0
@@ -98,6 +117,114 @@ RULE_DEFINITIONS = {
         "requires_manual_review": True,
         "severity": "HIGH"
     },
+    "P-16": {
+        "name": "MGMT-01: Negative Management Sentiment",
+        "trigger_description": "MD&A analysis shows negative sentiment using Loughran-McDonald lexicon",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 5,
+        "requires_manual_review": False,
+        "severity": "MEDIUM"
+    },
+    "P-17": {
+        "name": "SHARE-01: High Promoter Pledge",
+        "trigger_description": "Promoter shares pledged > 50% — distress signal, forced selling risk",
+        "rate_penalty_bps": 75,
+        "limit_reduction_pct": 10,
+        "requires_manual_review": True,
+        "severity": "HIGH"
+    },
+    "P-18": {
+        "name": "SHARE-02: Low Promoter Holding",
+        "trigger_description": "Promoter holding below 26% — low skin in the game",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 5,
+        "requires_manual_review": False,
+        "severity": "MEDIUM"
+    },
+    "P-19": {
+        "name": "SITE-01: Low Capacity Utilisation",
+        "severity": "HIGH",
+        "rate_penalty_bps": 100,
+        "limit_reduction_pct": 15,
+        "description": "Factory operating below 60% capacity",
+    },
+    "P-20": {
+        "name": "SITE-02: Premises Vacant / Shut",
+        "severity": "HIGH",
+        "rate_penalty_bps": 150,
+        "limit_reduction_pct": 25,
+        "description": "Physical premises found vacant or non-operational",
+    },
+    "P-21": {
+        "name": "SITE-03: Labour Dispute",
+        "severity": "HIGH",
+        "rate_penalty_bps": 100,
+        "limit_reduction_pct": 15,
+        "description": "Active labour dispute or strike at site",
+    },
+    "P-22": {
+        "name": "SITE-04: Management Non-Cooperative",
+        "severity": "HIGH",
+        "rate_penalty_bps": 125,
+        "limit_reduction_pct": 20,
+        "description": "Management refused to cooperate in due diligence",
+    },
+    "P-23": {
+        "name": "SITE-05: Inventory Build-up",
+        "severity": "MEDIUM",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 10,
+        "description": "Excess unsold inventory observed",
+    },
+    "P-24": {
+        "name": "SITE-06: Poor Asset Condition",
+        "severity": "MEDIUM",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 10,
+        "description": "Machinery in poor/deteriorating condition",
+    },
+    "P-25": {
+        "name": "SITE-07: Key Man Risk",
+        "severity": "MEDIUM",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 5,
+        "description": "Business entirely dependent on single person",
+    },
+    "P-26": {
+        "name": "SITE-08: Records Not Maintained",
+        "severity": "HIGH",
+        "rate_penalty_bps": 100,
+        "limit_reduction_pct": 20,
+        "description": "Books/records not maintained or produced",
+    },
+    "P-27": {
+        "name": "RATING-03: Sub-Investment Grade / Downgrade",
+        "severity": "HIGH",
+        "rate_penalty_bps": 75,
+        "limit_reduction_pct": 10,
+        "description": "Credit rating below investment grade or recent downgrade detected",
+    },
+    "P-28": {
+        "name": "BANK-02: Circular Bank Transactions",
+        "severity": "HIGH",
+        "rate_penalty_bps": 150,
+        "limit_reduction_pct": 25,
+        "description": "Round-trip money flows detected in bank statements (A→B→A within 7 days)",
+    },
+    "P-29": {
+        "name": "BANK-03: Cash Deposit Anomaly",
+        "severity": "MEDIUM",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 10,
+        "description": "Large cash deposits detected near GST filing dates — possible revenue inflation",
+    },
+    "P-30": {
+        "name": "BENCHMARK-01: Sector Underperformance",
+        "severity": "MEDIUM",
+        "rate_penalty_bps": 50,
+        "limit_reduction_pct": 10,
+        "description": "Company underperforming sector benchmarks by >25% on key margin ratios",
+    },
 }
 
 
@@ -120,6 +247,8 @@ def orchestrate_decision(
         restatement_data: Response from RestatementDetector (P-09, P-10)
         news_data:       Response from NewsScanner (P-13)
         site_visit_scan: Response from SiteVisitScanner (P-07)
+        mca_data:        Response from MCAScanner (P-14)
+        shareholding_data: Response from ShareholdingScanner (P-17, P-18)
 
     Returns:
         Unified decision dict:
@@ -174,6 +303,21 @@ def orchestrate_decision(
             if rule not in triggered:
                 triggered.append(rule)
 
+    # ── P-17 & P-18: Shareholding Scanner ─────────────────────────────────────
+    shareholding_data = (pdf_scan_result or {}).get("shareholding_data") or getattr(pdf_scan_result, "shareholding_data", None)
+    
+    if shareholding_data:
+        # If it's a dict
+        if isinstance(shareholding_data, dict):
+            for rule in shareholding_data.get("triggered_rules", []):
+                if rule not in triggered:
+                    triggered.append(rule)
+        # If it's an object/dataclass
+        elif hasattr(shareholding_data, "triggered_rules"):
+            for rule in shareholding_data.triggered_rules:
+                if rule not in triggered:
+                    triggered.append(rule)
+
     # ── Apply penalties ───────────────────────────────────────────────────────
     rate  = BASE_RATE_PCT
     limit = BASE_LIMIT_CR
@@ -191,7 +335,7 @@ def orchestrate_decision(
         applied.append({
             "rule_id":             rule_id,
             "name":                rule["name"],
-            "trigger":             rule["trigger_description"],
+            "trigger":             rule.get("trigger_description", rule.get("description", "")),
             "rate_penalty_bps":    bps,
             "limit_reduction_pct": cut_pct,
         })

@@ -12,7 +12,7 @@ import { useState, useCallback, useEffect } from 'react'
 import axios from 'axios'
 import {
     Brain, Shield, ChevronRight, AlertCircle, Download,
-    BarChart2, Map, ShieldAlert, Terminal, Cpu, TrendingDown,
+    BarChart2, Map, ShieldAlert, Terminal, Cpu, TrendingDown, TrendingUp,
     FileText, Building2, Landmark, Network, ListTree, ChevronDown, Eye
 } from 'lucide-react'
 import PDFViewer from './components/PDFViewer'
@@ -22,6 +22,9 @@ import CompliancePanel from './components/CompliancePanel'
 import NetworkAnalysis from './components/NetworkAnalysis'
 import AdverseMediaPanel from './components/AdverseMediaPanel'
 import RestatementAnalysis from './components/RestatementAnalysis'
+import TrendPanel from './components/TrendPanel'
+import BankStatementPanel from './components/BankStatementPanel'
+import SectorBenchmarkPanel from './components/SectorBenchmarkPanel'
 
 export const RULE_DISPLAY_NAMES = {
     "P-01": "GST-01: Revenue Mismatch",
@@ -37,10 +40,13 @@ export const RULE_DISPLAY_NAMES = {
     "P-12": "RATING-02: Downgrade/Default",
     "P-13": "MEDIA-01: Adverse Media",
     "P-15": "LEGAL-01: Active Court Proceedings",
-    "P-16": "MGMT-01: Negative Management Sentiment"
+    "P-16": "MGMT-01: Negative Management Sentiment",
+    "P-17": "SHARE-01: High Promoter Pledge",
+    "P-18": "SHARE-02: Low Promoter Holding"
 }
 
 // ── Client-side penalty orchestrator (mirrors backend logic) ─────────────────
+console.log("BASE_RATE INIT");
 const BASE_RATE = 9.0
 const BASE_LIMIT = 10.0
 
@@ -53,8 +59,23 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
     if (networkData?.circular_trading_detected) triggered.push('P-06')
     if (restatementData?.restatements_detected) triggered.push('P-09')
     if (restatementData?.auditor_changed) triggered.push('P-10')
-    if (pdfScan?.news_data?.adverse_media_detected) triggered.push('P-13')
+    const news = pdfScan?.news || pdfScan?.news_data;
+    if (news && news.adverse_media_detected) triggered.push('P-13')
+
+    // Check ecourts via multiple possible keys (ecourts vs ecourts_data)
+    let ecourts = pdfScan?.ecourts || pdfScan?.ecourts_data;
+    if (ecourts && ecourts.triggered_rules && ecourts.triggered_rules.includes('P-15')) {
+        if (!triggered.includes('P-15')) triggered.push('P-15')
+    }
     if (pdfScan?.mda_insights?.status === 'success' && pdfScan.mda_insights.sentiment_score < -0.01) triggered.push('P-16')
+
+    // Check shareholding risks
+    const shareholding = pdfScan?.shareholding_data;
+    if (shareholding && shareholding.triggered_rules) {
+        if (shareholding.triggered_rules.includes('P-17') && !triggered.includes('P-17')) triggered.push('P-17');
+        if (shareholding.triggered_rules.includes('P-18') && !triggered.includes('P-18')) triggered.push('P-18');
+    }
+
     const RULES = {
         'P-01': { name: RULE_DISPLAY_NAMES['P-01'], bps: 100, cut: 10, manual: false, trigger: 'GSTR-2A vs 3B mismatch > 15% (Perfios)' },
         'P-03': { name: RULE_DISPLAY_NAMES['P-03'], bps: 150, cut: 20, manual: false, trigger: 'CARO 2020 Clause (vii) / auditor qualification' },
@@ -65,6 +86,8 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
         'P-13': { name: RULE_DISPLAY_NAMES['P-13'], bps: 50, cut: 0, manual: true, trigger: 'NewsScanner found high-severity red flags (fraud, ED raid, etc.)' },
         'P-15': { name: RULE_DISPLAY_NAMES['P-15'], bps: 100, cut: 15, manual: true, trigger: 'High-risk court cases found via eCourts (NCLT/winding up/fraud/DRT)' },
         'P-16': { name: RULE_DISPLAY_NAMES['P-16'], bps: 50, cut: 5, manual: false, trigger: 'MD&A sentiment score negative per Loughran-McDonald lexicon' },
+        'P-17': { name: RULE_DISPLAY_NAMES['P-17'], bps: 75, cut: 10, manual: true, trigger: 'Promoter shares pledged > 50% — distress signal, forced selling risk' },
+        'P-18': { name: RULE_DISPLAY_NAMES['P-18'], bps: 50, cut: 5, manual: false, trigger: 'Promoter holding below 26% — low skin in the game' },
     }
 
     let rate = BASE_RATE
@@ -109,8 +132,11 @@ const TABS = [
     { id: 'waterfall', label: 'Waterfall', icon: BarChart2 },
     { id: 'heatmap', label: 'Evidence', icon: Map },
     { id: 'network', label: 'Network', icon: Network },
+    { id: 'bank-statement', label: 'Bank', icon: Landmark },
+    { id: 'benchmark', label: 'Benchmark', icon: BarChart2 },
     { id: 'adverse-media', label: 'Media & Legal', icon: ShieldAlert },
     { id: 'restatement', label: 'Restatement', icon: TrendingDown },
+    { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'sentiment', label: 'Sentiment', icon: Eye },
 ]
 
@@ -125,6 +151,8 @@ const ALL_RULES = [
     { id: 'P-13', label: RULE_DISPLAY_NAMES['P-13'], severity: 'HIGH' },
     { id: 'P-15', label: RULE_DISPLAY_NAMES['P-15'], severity: 'HIGH' },
     { id: 'P-16', label: RULE_DISPLAY_NAMES['P-16'] },
+    { id: 'P-17', label: RULE_DISPLAY_NAMES['P-17'], severity: 'HIGH' },
+    { id: 'P-18', label: RULE_DISPLAY_NAMES['P-18'] },
 ]
 
 function StatusBadge({ status, message }) {
@@ -140,6 +168,30 @@ function StatusBadge({ status, message }) {
             {s.text}
         </div>
     )
+}
+
+function FinancialFigure({ data }) {
+    if (!data) return <span className="font-mono text-[11px] font-bold text-ink">N/A</span>
+
+    let confBadge = null;
+    if (data.confidence === "HIGH") {
+        confBadge = <span style={{ color: "#22c55e", fontSize: "10px" }}>● HIGH</span>
+    } else if (data.confidence === "MEDIUM") {
+        confBadge = <span style={{ color: "#f59e0b", fontSize: "10px" }}>● MED</span>
+    } else if (data.confidence === "LOW") {
+        confBadge = <span style={{ color: "#ef4444", fontSize: "10px" }}>● LOW — verify manually</span>
+    }
+
+    const conversionStr = data.unit !== "Cr" && data.unit !== "unknown" && data.raw_value
+        ? `₹${data.raw_value} ${data.unit} → ₹${data.value} Cr`
+        : `₹${data.value} Cr`;
+
+    return (
+        <span className="font-mono text-[11px] font-bold text-ink flex items-center gap-2">
+            {conversionStr}
+            {confBadge}
+        </span>
+    );
 }
 
 // ── External bureau panels (read-only display) ────────────────────────────────
@@ -178,6 +230,8 @@ export default function App() {
     const [perfiosData, setPerfiosData] = useState(null)
     const [karzaData, setKarzaData] = useState(null)
     const [networkData, setNetworkData] = useState(null)
+    const [cibilData, setCibilData] = useState(null)
+    const [bankCsvFile, setBankCsvFile] = useState(null)
     const [primaryNotes, setPrimaryNotes] = useState('')
     const [loading, setLoading] = useState(false)
     const [camLoading, setCamLoading] = useState(false)
@@ -195,7 +249,7 @@ export default function App() {
 
     // ── Compute unified decision from all sources ──────────────────────────────
     const decision = (pdfResult || perfiosData || networkData)
-        ? orchestrateDecision(pdfResult, perfiosData, networkData)
+        ? orchestrateDecision(pdfResult, perfiosData, networkData, pdfResult?.restatement_data)
         : null
 
     const triggeredRules = decision?.triggered_rules || []
@@ -210,6 +264,8 @@ export default function App() {
         setPerfiosData(null)
         setKarzaData(null)
         setNetworkData(null)
+        setCibilData(null)
+        setBankCsvFile(null)
         setAuditTrail(null)
         setActiveTab('compliance')
         setProgressStepIdx(0)
@@ -224,8 +280,11 @@ export default function App() {
                 formData.append(fieldName, f.file)
             })
             formData.append("site_visit_notes", primaryNotes)
+            if (bankCsvFile) {
+                formData.append("bank_csv", bankCsvFile)
+            }
 
-            const [pdfResp, perfiosResp, karzaResp, networkResp] = await Promise.all([
+            const [pdfResp, perfiosResp, karzaResp, networkResp, cibilResp] = await Promise.all([
                 axios.post('/api/v1/analyze-report', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                     timeout: 180_000,
@@ -233,12 +292,14 @@ export default function App() {
                 axios.get('/api/v1/mock/perfios', { timeout: 180_000 }),
                 axios.get('/api/v1/mock/karza', { timeout: 180_000 }),
                 axios.get('/api/v1/mock/network-graph', { timeout: 180_000 }),
+                axios.get('/api/v1/mock/cibil', { timeout: 180_000 }),
             ])
 
             setPdfResult(pdfResp.data)
             setPerfiosData(perfiosResp.data)
             setKarzaData(karzaResp.data)
             setNetworkData(networkResp.data)
+            setCibilData(cibilResp.data)
 
             // Auto-jump to waterfall if any rule triggered
             const pendingDecision = orchestrateDecision(
@@ -343,14 +404,21 @@ export default function App() {
         <div className="min-h-screen bg-paper flex flex-col font-serif">
             {/* ── Topbar / Masthead ──────────────────────────────────────────────── */}
             <header className="border-b-[3px] border-border px-6 py-4 flex flex-col md:flex-row md:items-end justify-between bg-paper relative">
-                <div className="flex flex-col">
-                    <h1 className="font-display font-black text-ink text-5xl md:text-6xl tracking-tight uppercase leading-none mb-1">
-                        Project Pramaan
-                    </h1>
-                    <div className="border-t border-b border-border py-1 mt-1 inline-block">
-                        <p className="font-serif font-bold text-ink uppercase tracking-widest text-xs">
-                            Credit Committee Engine — Zero LLM
-                        </p>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <img
+                        src="/pramaan_logo.png"
+                        alt="Pramaan"
+                        style={{ height: '110px', width: 'auto', marginRight: '20px' }}
+                    />
+                    <div className="flex flex-col">
+                        <h1 className="font-display font-black text-ink text-5xl md:text-6xl tracking-tight uppercase leading-none mb-1">
+                            Project Pramaan
+                        </h1>
+                        <div className="border-t border-b border-border py-1 mt-1 inline-block">
+                            <p className="font-serif font-bold text-ink uppercase tracking-widest text-xs">
+                                Credit Committee Engine — Zero LLM
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -378,6 +446,37 @@ export default function App() {
                 {/* ── LEFT: Upload + Bureau cards + Notes ──────────────────────────── */}
                 <section className="lg:w-[42%] w-full flex-shrink-0 border-r-[3px] border-border p-6 overflow-y-auto flex flex-col gap-5 bg-paper">
                     <PDFViewer onFilesChange={handleFilesChange} isAnalyzing={loading} />
+
+                    {/* Bank Statement CSV Upload */}
+                    <div className="border-t-2 border-border pt-4">
+                        <label className="text-sm font-display font-bold text-ink uppercase tracking-wide flex items-center gap-2 mb-2">
+                            <Landmark size={14} className="text-ink" />
+                            Bank Statement (CSV)
+                        </label>
+                        <div className="relative">
+                            <input
+                                type="file"
+                                accept=".csv"
+                                onChange={(e) => setBankCsvFile(e.target.files?.[0] || null)}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                disabled={loading}
+                            />
+                            <div className={`p-3 border-2 border-dashed ${bankCsvFile ? 'border-ink bg-gray-50' : 'border-border bg-paper'} text-sm font-mono flex items-center justify-between`}>
+                                <span className={bankCsvFile ? 'text-ink font-bold' : 'text-muted'}>
+                                    {bankCsvFile ? bankCsvFile.name : 'Upload bank statement (CSV)...'}
+                                </span>
+                                {bankCsvFile && (
+                                    <button
+                                        type="button"
+                                        className="text-red font-bold uppercase text-[10px] z-10 relative px-2 hover:bg-red/10 border border-transparent hover:border-red"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBankCsvFile(null); }}
+                                    >
+                                        [REMOVE]
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Site visit notes */}
                     <div className="border-t-2 border-border pt-4">
@@ -669,15 +768,27 @@ export default function App() {
 
                                     <div className="flex items-center gap-2 flex-shrink-0">
                                         <span className="font-mono text-[11px] text-muted uppercase">Revenue:</span>
-                                        <span className="font-mono text-[11px] font-bold text-ink">₹{pdfResult.financials?.revenue_cr ?? 'N/A'} Cr</span>
+                                        <FinancialFigure data={pdfResult.extracted_figures?.Revenue} />
                                     </div>
                                     <div className="w-px h-3 bg-border" />
 
                                     <div className="flex items-center gap-2 flex-shrink-0">
                                         <span className="font-mono text-[11px] text-muted uppercase">Net Worth:</span>
-                                        <span className="font-mono text-[11px] font-bold text-ink">₹{pdfResult.financials?.net_worth_cr ?? 'N/A'} Cr</span>
+                                        <FinancialFigure data={pdfResult.extracted_figures?.["Net Worth"]} />
                                     </div>
                                     <div className="w-px h-3 bg-border" />
+
+                                    {cibilData && (
+                                        <>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <span className="font-mono text-[11px] text-muted uppercase">CIBIL:</span>
+                                                <span className={`font-mono text-[11px] font-bold uppercase ${cibilData.credit_score >= 75 ? 'text-green' :
+                                                    cibilData.credit_score >= 50 ? 'text-[#D4A017]' : 'text-red'
+                                                    }`}>{cibilData.credit_score}/100 ({cibilData.rating})</span>
+                                            </div>
+                                            <div className="w-px h-3 bg-border" />
+                                        </>
+                                    )}
 
                                     <div className="flex items-center gap-2 flex-shrink-0">
                                         <span className="font-mono text-[11px] font-bold text-ink uppercase">
@@ -687,6 +798,31 @@ export default function App() {
                                 </div>
                             )}
 
+                            {/* ── AI Decision Rationale ── */}
+                            {auditTrail && decision && (
+                                <div className="mx-5 mt-4 border-l-4 border-l-[#B91C1C] bg-[#F5F0E4] p-4" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-2 h-2 bg-[#B91C1C]" />
+                                        <span className="font-bold text-[#111] uppercase tracking-wider text-xs">AI Decision Rationale</span>
+                                    </div>
+                                    <p className="text-sm text-[#111] leading-relaxed font-serif">
+                                        {(() => {
+                                            const steps = auditTrail.steps || []
+                                            const penalties = steps.filter(s => s.rule && s.rule !== 'base')
+                                            const finalStep = steps[steps.length - 1]
+                                            const reco = decision.recommendation || 'N/A'
+                                            const ruleCount = (decision.triggered_rules || []).length
+
+                                            if (ruleCount === 0) {
+                                                return `APPROVE — No risk signals detected across all scanners. Base rate ${decision.base_rate_pct}% and limit ₹${decision.base_limit_cr} Cr maintained.`
+                                            }
+
+                                            const penaltyDescs = penalties.slice(0, 3).map(p => p.description.split('→')[0].trim()).join('; ')
+                                            return `${reco.replace(/_/g, ' ')} — ${ruleCount} rule${ruleCount > 1 ? 's' : ''} triggered. ${penaltyDescs}. Final rate: ${decision.final_rate_pct?.toFixed(2)}%, limit: ₹${decision.final_limit_cr?.toFixed(1)} Cr.`
+                                        })()}
+                                    </p>
+                                </div>
+                            )}
                             {/* Tab content */}
                             <div className="flex-1 overflow-y-auto p-5">
                                 {activeTab === 'compliance' && (
@@ -737,6 +873,12 @@ export default function App() {
                                 {activeTab === 'network' && (
                                     <NetworkAnalysis />
                                 )}
+                                {activeTab === 'bank-statement' && (
+                                    <BankStatementPanel bankData={pdfResult?.bank_statement} />
+                                )}
+                                {activeTab === 'benchmark' && (
+                                    <SectorBenchmarkPanel benchmarkData={pdfResult?.benchmark_data} />
+                                )}
                                 {activeTab === 'adverse-media' && (
                                     <div className="flex flex-col gap-6">
                                         <AdverseMediaPanel newsData={pdfResult?.news} />
@@ -773,14 +915,14 @@ export default function App() {
                                                             )}
                                                         </div>
 
-                                                        {ec.findings && ec.findings.length > 0 && (
+                                                        {(ec?.findings || []).length > 0 && (
                                                             <div className="flex flex-col gap-3">
-                                                                {ec.findings.map((f, idx) => (
+                                                                {(ec?.findings || []).map((f, idx) => (
                                                                     <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
                                                                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
-                                                                        <div className="font-mono text-xs font-bold text-red uppercase mb-1">[{f.severity}]</div>
-                                                                        <p className="font-serif text-ink text-sm leading-relaxed">{f.signal}</p>
-                                                                        <p className="font-mono text-xs text-muted mt-1">Court: {f.court || 'N/A'} | Filed: {f.filing_date || 'N/A'}</p>
+                                                                        <div className="font-mono text-xs font-bold text-red uppercase mb-1">[{f?.severity || "INFO"}]</div>
+                                                                        <p className="font-serif text-ink text-sm leading-relaxed">{f?.signal || "Finding signal missing"}</p>
+                                                                        <p className="font-mono text-xs text-muted mt-1">Court: {f?.court || 'N/A'} | Filed: {f?.filing_date || 'N/A'}</p>
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -800,6 +942,9 @@ export default function App() {
                                         restatementData={pdfResult?.restatement_data}
                                         pdfResult={pdfResult}
                                     />
+                                )}
+                                {activeTab === 'trends' && (
+                                    <TrendPanel perYearScans={pdfResult?.per_year_scans} />
                                 )}
                                 {activeTab === 'sentiment' && pdfResult?.mda_insights?.status === "success" && (
                                     <div className="flex flex-col gap-6">

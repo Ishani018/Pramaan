@@ -171,6 +171,56 @@ export default function CompliancePanel({ result, loading }) {
                     )}
                 </div>
 
+                {/* Shareholding detected */}
+                {result.shareholding_data && (
+                    <div className="p-6 border-b-2 border-border bg-paper">
+                        <h3 className="font-display font-bold uppercase tracking-wider text-sm mb-4 border-b-2 border-border pb-2 inline-block">
+                            Shareholding Pattern
+                        </h3>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-paper border-2 border-border p-4">
+                                <div className="text-xs font-mono font-bold text-muted uppercase">Promoter Holding</div>
+                                <div className={`text-2xl font-mono font-bold ${result.shareholding_data.promoter_holding_pct < 26 ? 'text-red' : 'text-ink'}`}>
+                                    {result.shareholding_data.promoter_holding_pct !== null ? `${result.shareholding_data.promoter_holding_pct}%` : 'N/A'}
+                                </div>
+                                {result.shareholding_data.promoter_holding_pct < 26 && (
+                                    <span className="text-[10px] font-mono font-bold text-white bg-red uppercase tracking-widest px-1 mt-1 inline-block">P-18 LOW SKIN</span>
+                                )}
+                            </div>
+                            <div className="bg-paper border-2 border-border p-4">
+                                <div className="text-xs font-mono font-bold text-muted uppercase">Pledged Shares</div>
+                                <div className={`text-2xl font-mono font-bold ${result.shareholding_data.pledged_pct > 50 ? 'text-red' : 'text-ink'}`}>
+                                    {result.shareholding_data.pledged_pct !== null ? `${result.shareholding_data.pledged_pct}%` : '0%'}
+                                </div>
+                                {result.shareholding_data.pledged_pct > 50 && (
+                                    <span className="text-[10px] font-mono font-bold text-white bg-red uppercase tracking-widest px-1 mt-1 inline-block">P-17 HIGH RISK</span>
+                                )}
+                            </div>
+                            <div className="bg-paper border-2 border-border p-4">
+                                <div className="text-xs font-mono font-bold text-muted uppercase">FII Holding</div>
+                                <div className="text-2xl font-mono font-bold text-ink">
+                                    {result.shareholding_data.fii_holding_pct !== null ? `${result.shareholding_data.fii_holding_pct}%` : 'N/A'}
+                                </div>
+                            </div>
+                            <div className="bg-paper border-2 border-border p-4">
+                                <div className="text-xs font-mono font-bold text-muted uppercase">Govt Holding</div>
+                                <div className="text-2xl font-mono font-bold text-ink">
+                                    {result.shareholding_data.government_holding_pct !== null ? `${result.shareholding_data.government_holding_pct}%` : '0%'}
+                                </div>
+                            </div>
+                        </div>
+                        {result.shareholding_data.findings && result.shareholding_data.findings.length > 0 && (
+                            <div className="mt-4 flex flex-col gap-2">
+                                {result.shareholding_data.findings.map((finding, idx) => (
+                                    <div key={idx} className="text-sm font-serif text-red italic border-l-2 border-red pl-3">
+                                        "{finding}"
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Section detected */}
                 <div className="p-6 border-b-2 border-border bg-paper-raised">
                     <h3 className="font-display font-bold uppercase tracking-wider text-sm mb-4 border-b-2 border-border pb-2 inline-block">

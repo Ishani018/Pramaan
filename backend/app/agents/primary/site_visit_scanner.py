@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 import re, logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 @dataclass
 class SiteVisitScanResult:

@@ -123,7 +123,7 @@ function buildChartData(decision) {
     return rows
 }
 
-const COLORS = { base: '#3B82F6', penalty: '#EF4444', final: '#10B981' }
+const COLORS = { base: '#111111', penalty: '#B91C1C', final: '#B91C1C' }
 
 const CustomLabel = ({ x, y, width, value, type, bps }) => {
     if (type !== 'penalty' || !bps) return null
@@ -143,7 +143,7 @@ export default function WaterfallChart({ decision, triggeredRules = [] }) {
     const isLive = !!decision
 
     return (
-        <div className="glass p-5 animate-fade-in space-y-5">
+        <div className="glass p-5 animate-fade-in space-y-5" style={{ backgroundColor: '#F5F0E4' }}>
             <div className="flex items-center justify-between">
                 <div>
                     <h3 className="font-semibold text-text flex items-center gap-2">
@@ -157,22 +157,22 @@ export default function WaterfallChart({ decision, triggeredRules = [] }) {
                     </p>
                 </div>
                 <div className="flex items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent inline-block" />Base</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-danger inline-block" />Penalty</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-success inline-block" />Final</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#111111' }} />Base</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#B91C1C' }} />Penalty</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#B91C1C' }} />Final</span>
                 </div>
             </div>
 
             <ResponsiveContainer width="100%" height={240}>
                 <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1E2D4A" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: '#64748B', fontSize: 10 }} tickLine={false} axisLine={false}
+                    <CartesianGrid strokeDasharray="3 3" stroke="#D4CFC4" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: '#111111', fontSize: 10 }} tickLine={false} axisLine={false}
                         tickFormatter={(val) => {
                             const key = Object.keys(WATERFALL_LABELS).find(k => val.startsWith(k))
                             return key ? WATERFALL_LABELS[key] : val
                         }}
                     />
-                    <YAxis tickFormatter={v => `${v}%`} tick={{ fill: '#64748B', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 14]} />
+                    <YAxis tickFormatter={v => `${v}%`} tick={{ fill: '#111111', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 14]} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59,130,246,0.05)' }} />
                     <ReferenceLine y={BASE_RATE} stroke="#3B82F6" strokeDasharray="4 2" strokeOpacity={0.4} />
                     <Bar dataKey="invisible" stackId="a" fill="transparent" />

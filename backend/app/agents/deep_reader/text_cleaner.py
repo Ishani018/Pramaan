@@ -9,7 +9,7 @@ import logging
 import re
 import unicodedata
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 def fix_split_words(text: str) -> str:
     """Rejoin words split by hyphen + newline (e.g., 'environ-\nment' -> 'environment')."""

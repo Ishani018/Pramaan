@@ -28,7 +28,7 @@ from typing import Dict, Any, Tuple
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 # ---------------------------------------------------------------------------
 # Constants

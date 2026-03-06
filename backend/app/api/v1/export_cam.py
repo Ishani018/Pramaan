@@ -32,7 +32,7 @@ from pydantic import BaseModel
 
 from app.utils.cam_generator import generate_cam
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 router = APIRouter(tags=["CAM Export"])
 

@@ -9,7 +9,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 import fitz
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 # ── Configuration for Pramaan ────────────────────────────────────────────────
 SECTION_CONFIGS = [

@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 import pdfplumber
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 def detect_pdf_type(pdf_path: Path, sample_pages: int = 10, min_avg_chars_per_page: int = 100) -> str:
     """

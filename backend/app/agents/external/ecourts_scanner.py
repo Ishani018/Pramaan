@@ -2,7 +2,7 @@ import requests, re, logging
 from dataclasses import dataclass, field
 from typing import List
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 @dataclass
 class ECourtsResult:
@@ -41,7 +41,7 @@ class ECourtsScanner:
             }
             response = requests.get(
                 url, params=params,
-                headers=headers, timeout=10)
+                headers=headers, timeout=5)
             logger.info(
                 f"ECourtsScanner: HTTP {response.status_code} "
                 f"for '{entity_name}'")
@@ -88,6 +88,6 @@ class ECourtsScanner:
                     f"body={response.text[:200]}")
 
         except Exception as e:
-            logger.error(f"ECourtsScanner failed: {e}")
+            logger.warning(f"ECourtsScanner: API unreachable — requires NIC network access (Error: {e})")
 
         return result

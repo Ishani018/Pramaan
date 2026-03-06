@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 @dataclass
 class MCAResult:

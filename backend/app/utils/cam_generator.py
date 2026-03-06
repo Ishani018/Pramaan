@@ -9,7 +9,7 @@ from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"pramaan.{__name__}")
 
 try:
     from docx import Document
@@ -329,7 +329,18 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     
     holders = karza.get("charge_holders", [])
     _kv_row(c5_tbl, "Registered Charges (MCA)", ", ".join(holders) if holders else "None")
-    _kv_row(c5_tbl, "Security Coverage Ratio", data.get("security_coverage", "— Pending Legal Eval"))
+    
+    col_data = pdf_scan.get("collateral", {})
+    if col_data:
+        has_unsec = col_data.get("has_unsecured_loans", False)
+        _kv_row(c5_tbl, "Unsecured Borrowings", "⚠ Detected [P-31]" if has_unsec else "✓ None", DANGER_RED if has_unsec else SUCCESS_GREEN)
+        
+        findings = col_data.get("findings", [])
+        if findings:
+            for i, f in enumerate(findings):
+                _kv_row(c5_tbl, f"Collateral Finding {i+1}", f"{f.get('security_type')} on {f.get('asset_type')}")
+    else:
+        _kv_row(c5_tbl, "Security Coverage Ratio", data.get("security_coverage", "— Pending Legal Eval"))
     
     _add_body_para(doc, "Note: Primary security to be verified by legal team.", bold=True).runs[0].font.color.rgb = _rgb(GREY)
     doc.add_paragraph()
