@@ -19,61 +19,6 @@
   "interest_rate": 3.18,
   "transactions": [
     {
-      "date": "2024-03-10 11:00:00",
-      "value_date": "2024-03-10",
-      "description": "NEFT Dr-RTGS-ROUND-TRIP-TEST-0",
-      "cheque_no": "",
-      "debit": 1000000.0,
-      "credit": null,
-      "balance": -934781.65,
-      "branch_code": "9999",
-      "failed": false
-    },
-    {
-      "date": "2024-03-11 11:00:00",
-      "value_date": "2024-03-11",
-      "description": "NEFT Dr-RTGS-ROUND-TRIP-TEST-1",
-      "cheque_no": "",
-      "debit": 1000000.0,
-      "credit": null,
-      "balance": -1934781.65,
-      "branch_code": "9999",
-      "failed": false
-    },
-    {
-      "date": "2024-03-12 11:00:00",
-      "value_date": "2024-03-12",
-      "description": "NEFT Dr-RTGS-ROUND-TRIP-TEST-2",
-      "cheque_no": "",
-      "debit": 1000000.0,
-      "credit": null,
-      "balance": -1934781.65,
-      "branch_code": "9999",
-      "failed": false
-    },
-    {
-      "date": "2024-03-13 11:00:00",
-      "value_date": "2024-03-13",
-      "description": "NEFT Dr-RTGS-ROUND-TRIP-TEST-3",
-      "cheque_no": "",
-      "debit": 1000000.0,
-      "credit": null,
-      "balance": -1934781.65,
-      "branch_code": "9999",
-      "failed": false
-    },
-    {
-      "date": "2024-03-14 11:00:00",
-      "value_date": "2024-03-14",
-      "description": "NEFT Dr-RTGS-ROUND-TRIP-TEST-4",
-      "cheque_no": "",
-      "debit": 1000000.0,
-      "credit": null,
-      "balance": -1934781.65,
-      "branch_code": "9999",
-      "failed": false
-    },
-    {
       "date": "2024-01-01 11:30:55",
       "value_date": "2024-01-01",
       "description": "NEFT Cr-210968206613-ICIC0SF0002-CLOTHING INDUSTRIES LTD--",
@@ -289,7 +234,7 @@
       "cheque_no": "",
       "debit": 1347.6,
       "credit": null,
-      "balance": 20386.59,
+      "balance": 28601.09,
       "branch_code": "3421",
       "failed": false
     },
@@ -300,7 +245,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 3103.69,
-      "balance": 33052.38,
+      "balance": 31704.78,
       "branch_code": "6738",
       "failed": false
     },
@@ -311,7 +256,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 1376.45,
-      "balance": 34428.83,
+      "balance": 33081.23,
       "branch_code": "6738",
       "failed": false
     },
@@ -322,7 +267,7 @@
       "cheque_no": "",
       "debit": 5267.64,
       "credit": null,
-      "balance": 29161.19,
+      "balance": 27813.59,
       "branch_code": "4156",
       "failed": false
     },
@@ -333,7 +278,7 @@
       "cheque_no": "",
       "debit": 6725.28,
       "credit": null,
-      "balance": 22435.91,
+      "balance": 21088.31,
       "branch_code": "3421",
       "failed": false
     },
@@ -344,7 +289,7 @@
       "cheque_no": "957010",
       "debit": 6233.58,
       "credit": null,
-      "balance": 16202.33,
+      "balance": 14854.73,
       "branch_code": "4156",
       "failed": false
     },
@@ -355,7 +300,7 @@
       "cheque_no": "126340",
       "debit": 6513.72,
       "credit": null,
-      "balance": 9688.61,
+      "balance": 8341.01,
       "branch_code": "3421",
       "failed": false
     },
@@ -366,7 +311,7 @@
       "cheque_no": "",
       "debit": 3329.88,
       "credit": null,
-      "balance": 6358.73,
+      "balance": 5011.13,
       "branch_code": "5749",
       "failed": false
     },
@@ -377,7 +322,7 @@
       "cheque_no": "",
       "debit": 523.74,
       "credit": null,
-      "balance": 5834.99,
+      "balance": 4487.39,
       "branch_code": "6738",
       "failed": false
     },
@@ -388,7 +333,7 @@
       "cheque_no": "402358",
       "debit": null,
       "credit": 312.87,
-      "balance": 6147.86,
+      "balance": 4800.26,
       "branch_code": "4156",
       "failed": false
     },
@@ -399,7 +344,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 1554.17,
-      "balance": 7702.03,
+      "balance": 6354.43,
       "branch_code": "6738",
       "failed": false
     },
@@ -410,7 +355,7 @@
       "cheque_no": "715263",
       "debit": null,
       "credit": 1828.18,
-      "balance": 9530.21,
+      "balance": 8182.61,
       "branch_code": "3421",
       "failed": false
     },
@@ -421,7 +366,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 4328.08,
-      "balance": 13858.29,
+      "balance": 12510.69,
       "branch_code": "4156",
       "failed": false
     },
@@ -432,7 +377,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 1152.35,
-      "balance": 15010.64,
+      "balance": 13663.04,
       "branch_code": "6738",
       "failed": false
     },
@@ -443,7 +388,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 1279.23,
-      "balance": 16289.87,
+      "balance": 14942.27,
       "branch_code": "5749",
       "failed": false
     },
@@ -454,7 +399,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 2864.65,
-      "balance": 19154.52,
+      "balance": 17806.92,
       "branch_code": "6738",
       "failed": false
     },
@@ -465,7 +410,7 @@
       "cheque_no": "",
       "debit": 8256.49,
       "credit": null,
-      "balance": 10898.03,
+      "balance": 9550.43,
       "branch_code": "5749",
       "failed": false
     },
@@ -476,7 +421,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 216.21,
-      "balance": 11114.24,
+      "balance": 9766.64,
       "branch_code": "3421",
       "failed": false
     },
@@ -487,7 +432,7 @@
       "cheque_no": "840121",
       "debit": 2677.73,
       "credit": null,
-      "balance": 8436.51,
+      "balance": 7088.91,
       "branch_code": "6738",
       "failed": false
     },
@@ -498,7 +443,7 @@
       "cheque_no": "",
       "debit": 866.79,
       "credit": null,
-      "balance": 7569.72,
+      "balance": 6222.12,
       "branch_code": "4156",
       "failed": false
     },
@@ -509,7 +454,7 @@
       "cheque_no": "",
       "debit": 1087.71,
       "credit": null,
-      "balance": 6482.01,
+      "balance": 5134.41,
       "branch_code": "6738",
       "failed": false
     },
@@ -520,7 +465,7 @@
       "cheque_no": "",
       "debit": 5009.85,
       "credit": null,
-      "balance": 1472.16,
+      "balance": 124.56,
       "branch_code": "6738",
       "failed": false
     },
@@ -531,7 +476,7 @@
       "cheque_no": "",
       "debit": 10476.71,
       "credit": null,
-      "balance": 9909.88,
+      "balance": -10352.15,
       "branch_code": "5749",
       "failed": false
     },
@@ -542,7 +487,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 979.59,
-      "balance": 2451.75,
+      "balance": -9372.56,
       "branch_code": "5749",
       "failed": false
     },
@@ -553,7 +498,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 785.55,
-      "balance": 3237.3,
+      "balance": -8587.01,
       "branch_code": "3421",
       "failed": false
     },
@@ -564,7 +509,7 @@
       "cheque_no": "955072",
       "debit": null,
       "credit": 326.25,
-      "balance": 3563.55,
+      "balance": -8260.76,
       "branch_code": "5749",
       "failed": false
     },
@@ -575,7 +520,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 712.07,
-      "balance": 4275.62,
+      "balance": -7548.69,
       "branch_code": "4156",
       "failed": false
     },
@@ -586,7 +531,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 935.48,
-      "balance": 5211.1,
+      "balance": -6613.21,
       "branch_code": "6738",
       "failed": false
     },
@@ -597,7 +542,7 @@
       "cheque_no": "344189",
       "debit": null,
       "credit": 487.33,
-      "balance": 5698.43,
+      "balance": -6125.88,
       "branch_code": "4156",
       "failed": false
     },
@@ -608,7 +553,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 7836.93,
-      "balance": 13535.36,
+      "balance": 1711.05,
       "branch_code": "5749",
       "failed": false
     },
@@ -619,7 +564,7 @@
       "cheque_no": "",
       "debit": 2731.48,
       "credit": null,
-      "balance": 10803.88,
+      "balance": -1020.43,
       "branch_code": "5749",
       "failed": false
     },
@@ -630,7 +575,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 161.94,
-      "balance": 10965.82,
+      "balance": -858.49,
       "branch_code": "4156",
       "failed": false
     },
@@ -641,7 +586,7 @@
       "cheque_no": "574883",
       "debit": null,
       "credit": 1083.23,
-      "balance": 12049.05,
+      "balance": 224.74,
       "branch_code": "5749",
       "failed": false
     },
@@ -652,7 +597,7 @@
       "cheque_no": "",
       "debit": 4231.14,
       "credit": null,
-      "balance": 7817.91,
+      "balance": -4006.4,
       "branch_code": "4156",
       "failed": false
     },
@@ -663,7 +608,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 297.82,
-      "balance": 8115.73,
+      "balance": -3708.58,
       "branch_code": "5749",
       "failed": false
     },
@@ -674,7 +619,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 2947.62,
-      "balance": 11063.35,
+      "balance": -760.96,
       "branch_code": "6738",
       "failed": false
     },
@@ -685,7 +630,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 353.7,
-      "balance": 11417.05,
+      "balance": -407.26,
       "branch_code": "6738",
       "failed": false
     },
@@ -696,7 +641,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 3226.77,
-      "balance": 14643.82,
+      "balance": 2819.51,
       "branch_code": "5749",
       "failed": false
     },
@@ -707,7 +652,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 2056.48,
-      "balance": 16700.3,
+      "balance": 4875.99,
       "branch_code": "4156",
       "failed": false
     },
@@ -718,7 +663,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 401.24,
-      "balance": 17101.54,
+      "balance": 5277.23,
       "branch_code": "4156",
       "failed": false
     },
@@ -729,7 +674,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 819.21,
-      "balance": 17920.75,
+      "balance": 6096.44,
       "branch_code": "3421",
       "failed": false
     },
@@ -740,7 +685,7 @@
       "cheque_no": "",
       "debit": 353.7,
       "credit": null,
-      "balance": 21308.12,
+      "balance": 5742.74,
       "branch_code": "6738",
       "failed": false
     },
@@ -751,7 +696,7 @@
       "cheque_no": "",
       "debit": 396.36,
       "credit": null,
-      "balance": 17524.39,
+      "balance": 5346.38,
       "branch_code": "6738",
       "failed": false
     },
@@ -762,8 +707,19 @@
       "cheque_no": "",
       "debit": null,
       "credit": 2246.64,
-      "balance": 19771.03,
+      "balance": 7593.02,
       "branch_code": "6738",
+      "failed": false
+    },
+    {
+      "date": "2024-02-01 10:00:00",
+      "value_date": "2024-02-01",
+      "description": "NEFT Dr-7777888899-HDFC0003333-GLOBAL COMMODITIES TRADING LTD",
+      "cheque_no": "",
+      "debit": 1000000.0,
+      "credit": null,
+      "balance": -992406.98,
+      "branch_code": "9999",
       "failed": false
     },
     {
@@ -773,7 +729,7 @@
       "cheque_no": "",
       "debit": 1288.87,
       "credit": null,
-      "balance": 18482.16,
+      "balance": -993695.85,
       "branch_code": "4156",
       "failed": false
     },
@@ -784,8 +740,19 @@
       "cheque_no": "",
       "debit": 9482.92,
       "credit": null,
-      "balance": 8999.24,
+      "balance": -1003178.77,
       "branch_code": "5749",
+      "failed": false
+    },
+    {
+      "date": "2024-02-03 11:00:00",
+      "value_date": "2024-02-03",
+      "description": "NEFT Dr-8888999900-HDFC0003333-GLOBAL COMMODITIES TRADING LTD",
+      "cheque_no": "",
+      "debit": 1000000.0,
+      "credit": null,
+      "balance": -2003178.77,
+      "branch_code": "9999",
       "failed": false
     },
     {
@@ -795,7 +762,7 @@
       "cheque_no": "689437",
       "debit": null,
       "credit": 1520.04,
-      "balance": 10519.28,
+      "balance": -2001658.73,
       "branch_code": "6738",
       "failed": false
     },
@@ -806,7 +773,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 20416.63,
-      "balance": 30935.91,
+      "balance": -1981242.1,
       "branch_code": "6738",
       "failed": false
     },
@@ -817,8 +784,19 @@
       "cheque_no": "",
       "debit": 12427.35,
       "credit": null,
-      "balance": 18508.56,
+      "balance": -1993669.45,
       "branch_code": "6738",
+      "failed": false
+    },
+    {
+      "date": "2024-02-05 12:00:00",
+      "value_date": "2024-02-05",
+      "description": "NEFT Cr-9999000011-HDFC0003333-GLOBAL COMMODITIES TRADING LTD",
+      "cheque_no": "",
+      "debit": null,
+      "credit": 1950000.0,
+      "balance": -43669.45,
+      "branch_code": "9999",
       "failed": false
     },
     {
@@ -828,7 +806,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 378.91,
-      "balance": 18887.47,
+      "balance": -43290.54,
       "branch_code": "6738",
       "failed": false
     },
@@ -839,7 +817,7 @@
       "cheque_no": "",
       "debit": 2523.73,
       "credit": null,
-      "balance": 16363.74,
+      "balance": -45814.27,
       "branch_code": "6738",
       "failed": false
     },
@@ -850,7 +828,7 @@
       "cheque_no": "251839",
       "debit": 7465.74,
       "credit": null,
-      "balance": 8898.0,
+      "balance": -53280.01,
       "branch_code": "4156",
       "failed": false
     },
@@ -861,7 +839,7 @@
       "cheque_no": "893227",
       "debit": null,
       "credit": 583.89,
-      "balance": 9481.89,
+      "balance": -52696.12,
       "branch_code": "6738",
       "failed": false
     },
@@ -872,7 +850,7 @@
       "cheque_no": "",
       "debit": 6944.61,
       "credit": null,
-      "balance": 2537.28,
+      "balance": -59640.73,
       "branch_code": "4156",
       "failed": false
     },
@@ -883,7 +861,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 302.74,
-      "balance": 2840.02,
+      "balance": -59337.99,
       "branch_code": "4156",
       "failed": false
     },
@@ -894,7 +872,7 @@
       "cheque_no": "",
       "debit": 3352.68,
       "credit": null,
-      "balance": 6557.2,
+      "balance": -62690.67,
       "branch_code": "3421",
       "failed": false
     },
@@ -905,7 +883,7 @@
       "cheque_no": "502108",
       "debit": null,
       "credit": 432.09,
-      "balance": 3272.11,
+      "balance": -62258.58,
       "branch_code": "6738",
       "failed": false
     },
@@ -916,7 +894,7 @@
       "cheque_no": "329288",
       "debit": null,
       "credit": 853.56,
-      "balance": 4125.67,
+      "balance": -61405.02,
       "branch_code": "5749",
       "failed": false
     },
@@ -927,7 +905,7 @@
       "cheque_no": "975529",
       "debit": null,
       "credit": 451.25,
-      "balance": 4576.92,
+      "balance": -60953.77,
       "branch_code": "6738",
       "failed": false
     },
@@ -938,7 +916,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 1785.19,
-      "balance": 6362.11,
+      "balance": -59168.58,
       "branch_code": "5749",
       "failed": false
     },
@@ -949,7 +927,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 929.96,
-      "balance": 7292.07,
+      "balance": -58238.62,
       "branch_code": "5749",
       "failed": false
     },
@@ -960,7 +938,7 @@
       "cheque_no": "829510",
       "debit": null,
       "credit": 712.98,
-      "balance": 8005.05,
+      "balance": -57525.64,
       "branch_code": "4156",
       "failed": false
     },
@@ -971,7 +949,7 @@
       "cheque_no": "",
       "debit": 929.96,
       "credit": null,
-      "balance": 20378.16,
+      "balance": -58455.6,
       "branch_code": "5749",
       "failed": false
     },
@@ -982,7 +960,7 @@
       "cheque_no": "",
       "debit": 1830.56,
       "credit": null,
-      "balance": 6174.49,
+      "balance": -60286.16,
       "branch_code": "4156",
       "failed": false
     },
@@ -993,7 +971,7 @@
       "cheque_no": "",
       "debit": 1310.51,
       "credit": null,
-      "balance": 4863.98,
+      "balance": -61596.67,
       "branch_code": "5749",
       "failed": false
     },
@@ -1004,8 +982,19 @@
       "cheque_no": "",
       "debit": null,
       "credit": 6440.36,
-      "balance": 11304.34,
+      "balance": -55156.31,
       "branch_code": "3421",
+      "failed": false
+    },
+    {
+      "date": "2024-02-15 09:00:00",
+      "value_date": "2024-02-15",
+      "description": "RTGS Dr-CNRBR112233445-ICIC0007777-APEX VENTURES INDIA PVT LTD-/NONE",
+      "cheque_no": "",
+      "debit": 2000000.0,
+      "credit": null,
+      "balance": -2055156.31,
+      "branch_code": "9999",
       "failed": false
     },
     {
@@ -1015,7 +1004,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 5451.92,
-      "balance": 16756.26,
+      "balance": -2049704.39,
       "branch_code": "3421",
       "failed": false
     },
@@ -1026,7 +1015,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 962.42,
-      "balance": 17718.68,
+      "balance": -2048741.97,
       "branch_code": "5749",
       "failed": false
     },
@@ -1037,7 +1026,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 19038.22,
-      "balance": 36756.9,
+      "balance": -2029703.75,
       "branch_code": "5749",
       "failed": false
     },
@@ -1048,8 +1037,19 @@
       "cheque_no": "",
       "debit": 1832.42,
       "credit": null,
-      "balance": 34924.48,
+      "balance": -2031536.17,
       "branch_code": "4156",
+      "failed": false
+    },
+    {
+      "date": "2024-02-17 14:00:00",
+      "value_date": "2024-02-17",
+      "description": "RTGS Cr-ICICR223344556-ICIC0007777-APEX VENTURES INDIA PVT LTD--/URGENT/",
+      "cheque_no": "",
+      "debit": null,
+      "credit": 1980000.0,
+      "balance": -51536.17,
+      "branch_code": "9999",
       "failed": false
     },
     {
@@ -1059,7 +1059,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 2325.53,
-      "balance": 37250.01,
+      "balance": -49210.64,
       "branch_code": "4156",
       "failed": false
     },
@@ -1070,7 +1070,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 43436.34,
-      "balance": 80686.35,
+      "balance": -5774.3,
       "branch_code": "6738",
       "failed": false
     },
@@ -1081,7 +1081,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 14590.37,
-      "balance": 95276.72,
+      "balance": 8816.07,
       "branch_code": "6738",
       "failed": false
     },
@@ -1092,7 +1092,7 @@
       "cheque_no": "",
       "debit": 8657.44,
       "credit": null,
-      "balance": 86619.28,
+      "balance": 158.63,
       "branch_code": "3421",
       "failed": false
     },
@@ -1103,7 +1103,7 @@
       "cheque_no": "",
       "debit": 5067.47,
       "credit": null,
-      "balance": 81551.81,
+      "balance": -4908.84,
       "branch_code": "5749",
       "failed": false
     },
@@ -1114,7 +1114,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 22264.98,
-      "balance": 103816.79,
+      "balance": 17356.14,
       "branch_code": "6738",
       "failed": false
     },
@@ -1125,7 +1125,7 @@
       "cheque_no": "",
       "debit": 10476.71,
       "credit": null,
-      "balance": -3919.51,
+      "balance": 6879.43,
       "branch_code": "5749",
       "failed": false
     },
@@ -1136,7 +1136,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 106.68,
-      "balance": 103923.47,
+      "balance": 6986.11,
       "branch_code": "5749",
       "failed": false
     },
@@ -1147,7 +1147,7 @@
       "cheque_no": "",
       "debit": 5170.28,
       "credit": null,
-      "balance": 98753.19,
+      "balance": 1815.83,
       "branch_code": "5749",
       "failed": false
     },
@@ -1158,7 +1158,7 @@
       "cheque_no": "891135",
       "debit": null,
       "credit": 14081.58,
-      "balance": 112834.77,
+      "balance": 15897.41,
       "branch_code": "5749",
       "failed": false
     },
@@ -1169,7 +1169,7 @@
       "cheque_no": "968646",
       "debit": null,
       "credit": 14029.17,
-      "balance": 126863.94,
+      "balance": 29926.58,
       "branch_code": "3421",
       "failed": false
     },
@@ -1180,7 +1180,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 49027.87,
-      "balance": 175891.81,
+      "balance": 78954.45,
       "branch_code": "3421",
       "failed": false
     },
@@ -1191,7 +1191,7 @@
       "cheque_no": "853292",
       "debit": 71993.52,
       "credit": null,
-      "balance": 103898.29,
+      "balance": 6960.93,
       "branch_code": "4156",
       "failed": false
     },
@@ -1202,7 +1202,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 37177.04,
-      "balance": 141075.33,
+      "balance": 44137.97,
       "branch_code": "3421",
       "failed": false
     },
@@ -1213,7 +1213,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 33889.33,
-      "balance": 174964.66,
+      "balance": 78027.3,
       "branch_code": "4156",
       "failed": false
     },
@@ -1224,7 +1224,7 @@
       "cheque_no": "396084",
       "debit": null,
       "credit": 51788.93,
-      "balance": 226753.59,
+      "balance": 129816.23,
       "branch_code": "4156",
       "failed": false
     },
@@ -1235,7 +1235,7 @@
       "cheque_no": "",
       "debit": 1759.58,
       "credit": null,
-      "balance": -5679.09,
+      "balance": 128056.65,
       "branch_code": "3421",
       "failed": false
     },
@@ -1246,7 +1246,7 @@
       "cheque_no": "",
       "debit": 61198.68,
       "credit": null,
-      "balance": 165554.91,
+      "balance": 66857.97,
       "branch_code": "5749",
       "failed": false
     },
@@ -1257,7 +1257,7 @@
       "cheque_no": "",
       "debit": 1622.9,
       "credit": null,
-      "balance": 163932.01,
+      "balance": 65235.07,
       "branch_code": "4156",
       "failed": false
     },
@@ -1268,7 +1268,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 9271.67,
-      "balance": 173203.68,
+      "balance": 74506.74,
       "branch_code": "5749",
       "failed": false
     },
@@ -1279,7 +1279,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 25697.34,
-      "balance": 198901.02,
+      "balance": 100204.08,
       "branch_code": "3421",
       "failed": false
     },
@@ -1290,7 +1290,7 @@
       "cheque_no": "543064",
       "debit": 99036.48,
       "credit": null,
-      "balance": 99864.54,
+      "balance": 1167.6,
       "branch_code": "4156",
       "failed": false
     },
@@ -1301,7 +1301,7 @@
       "cheque_no": "",
       "debit": 33492.48,
       "credit": null,
-      "balance": 66372.06,
+      "balance": -32324.88,
       "branch_code": "5749",
       "failed": false
     },
@@ -1312,7 +1312,7 @@
       "cheque_no": "",
       "debit": 14033.52,
       "credit": null,
-      "balance": 52338.54,
+      "balance": -46358.4,
       "branch_code": "4156",
       "failed": false
     },
@@ -1323,7 +1323,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 2163.29,
-      "balance": 54501.83,
+      "balance": -44195.11,
       "branch_code": "6738",
       "failed": false
     },
@@ -1334,7 +1334,7 @@
       "cheque_no": "909393",
       "debit": null,
       "credit": 6835.45,
-      "balance": 61337.28,
+      "balance": -37359.66,
       "branch_code": "6738",
       "failed": false
     },
@@ -1345,7 +1345,7 @@
       "cheque_no": "",
       "debit": 337.27,
       "credit": null,
-      "balance": -6016.36,
+      "balance": -37696.93,
       "branch_code": "6738",
       "failed": false
     },
@@ -1356,7 +1356,7 @@
       "cheque_no": "",
       "debit": 206.83,
       "credit": null,
-      "balance": -6223.19,
+      "balance": -37903.76,
       "branch_code": "3421",
       "failed": false
     },
@@ -1367,7 +1367,7 @@
       "cheque_no": "",
       "debit": 90.75,
       "credit": null,
-      "balance": -6313.94,
+      "balance": -37994.51,
       "branch_code": "5749",
       "failed": false
     },
@@ -1378,7 +1378,7 @@
       "cheque_no": "240534",
       "debit": 26979.32,
       "credit": null,
-      "balance": 34357.96,
+      "balance": -64973.83,
       "branch_code": "5749",
       "failed": false
     },
@@ -1389,8 +1389,19 @@
       "cheque_no": "",
       "debit": 22061.03,
       "credit": null,
-      "balance": 12296.93,
+      "balance": -87034.86,
       "branch_code": "4156",
+      "failed": false
+    },
+    {
+      "date": "2024-03-01 10:00:00",
+      "value_date": "2024-03-01",
+      "description": "NEFT Dr-1010101010-SBIN0005555-NATIONAL RESOURCES CORP LTD",
+      "cheque_no": "",
+      "debit": 500000.0,
+      "credit": null,
+      "balance": -587034.86,
+      "branch_code": "9999",
       "failed": false
     },
     {
@@ -1400,7 +1411,7 @@
       "cheque_no": "140933",
       "debit": 6091.77,
       "credit": null,
-      "balance": 6205.16,
+      "balance": -593126.63,
       "branch_code": "4156",
       "failed": false
     },
@@ -1411,7 +1422,7 @@
       "cheque_no": "",
       "debit": 823.12,
       "credit": null,
-      "balance": 5382.04,
+      "balance": -593949.75,
       "branch_code": "3421",
       "failed": false
     },
@@ -1422,8 +1433,19 @@
       "cheque_no": "",
       "debit": null,
       "credit": 6595.41,
-      "balance": 11977.45,
+      "balance": -587354.34,
       "branch_code": "4156",
+      "failed": false
+    },
+    {
+      "date": "2024-03-03 16:00:00",
+      "value_date": "2024-03-03",
+      "description": "NEFT Cr-2020202020-SBIN0005555-NATIONAL RESOURCES CORP LTD",
+      "cheque_no": "",
+      "debit": null,
+      "credit": 495000.0,
+      "balance": -92354.34,
+      "branch_code": "9999",
       "failed": false
     },
     {
@@ -1433,7 +1455,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 503.0,
-      "balance": 12480.45,
+      "balance": -91851.34,
       "branch_code": "4156",
       "failed": false
     },
@@ -1444,7 +1466,7 @@
       "cheque_no": "",
       "debit": 1097.33,
       "credit": null,
-      "balance": 11383.12,
+      "balance": -92948.67,
       "branch_code": "5749",
       "failed": false
     },
@@ -1455,7 +1477,7 @@
       "cheque_no": "",
       "debit": 1560.02,
       "credit": null,
-      "balance": 9823.1,
+      "balance": -94508.69,
       "branch_code": "5749",
       "failed": false
     },
@@ -1466,7 +1488,7 @@
       "cheque_no": "392613",
       "debit": null,
       "credit": 787.87,
-      "balance": 10610.97,
+      "balance": -93720.82,
       "branch_code": "6738",
       "failed": false
     },
@@ -1477,7 +1499,7 @@
       "cheque_no": "521060",
       "debit": null,
       "credit": 1935.68,
-      "balance": 12546.65,
+      "balance": -91785.14,
       "branch_code": "4156",
       "failed": false
     },
@@ -1488,7 +1510,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 17289.4,
-      "balance": 29836.05,
+      "balance": -74495.74,
       "branch_code": "4156",
       "failed": false
     },
@@ -1499,7 +1521,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 14338.29,
-      "balance": 44174.34,
+      "balance": -60157.45,
       "branch_code": "3421",
       "failed": false
     },
@@ -1510,7 +1532,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 3170.94,
-      "balance": 47345.28,
+      "balance": -56986.51,
       "branch_code": "3421",
       "failed": false
     },
@@ -1521,7 +1543,7 @@
       "cheque_no": "",
       "debit": 3236.48,
       "credit": null,
-      "balance": 44108.8,
+      "balance": -60222.99,
       "branch_code": "5749",
       "failed": false
     },
@@ -1532,7 +1554,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 20750.49,
-      "balance": 64859.29,
+      "balance": -39472.5,
       "branch_code": "3421",
       "failed": false
     },
@@ -1543,7 +1565,7 @@
       "cheque_no": "",
       "debit": 41602.44,
       "credit": null,
-      "balance": 23256.85,
+      "balance": -81074.94,
       "branch_code": "3421",
       "failed": false
     },
@@ -1554,7 +1576,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 5733.73,
-      "balance": 28990.58,
+      "balance": -75341.21,
       "branch_code": "3421",
       "failed": false
     },
@@ -1565,7 +1587,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 1356.03,
-      "balance": 21734.19,
+      "balance": -73985.18,
       "branch_code": "4156",
       "failed": false
     },
@@ -1576,7 +1598,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 743.12,
-      "balance": 29733.7,
+      "balance": -73242.06,
       "branch_code": "3421",
       "failed": false
     },
@@ -1587,7 +1609,7 @@
       "cheque_no": "",
       "debit": 361.52,
       "credit": null,
-      "balance": 29372.18,
+      "balance": -73603.58,
       "branch_code": "5749",
       "failed": false
     },
@@ -1598,7 +1620,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 11491.98,
-      "balance": 40864.16,
+      "balance": -62111.6,
       "branch_code": "6738",
       "failed": false
     },
@@ -1609,7 +1631,7 @@
       "cheque_no": "837712",
       "debit": 10836.25,
       "credit": null,
-      "balance": 30027.91,
+      "balance": -72947.85,
       "branch_code": "5749",
       "failed": false
     },
@@ -1620,7 +1642,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 745.26,
-      "balance": 30773.17,
+      "balance": -72202.59,
       "branch_code": "3421",
       "failed": false
     },
@@ -1631,7 +1653,7 @@
       "cheque_no": "101643",
       "debit": null,
       "credit": 5003.83,
-      "balance": 35777.0,
+      "balance": -67198.76,
       "branch_code": "6738",
       "failed": false
     },
@@ -1642,7 +1664,7 @@
       "cheque_no": "934101",
       "debit": 13018.88,
       "credit": null,
-      "balance": 22758.12,
+      "balance": -80217.64,
       "branch_code": "4156",
       "failed": false
     },
@@ -1653,7 +1675,7 @@
       "cheque_no": "718822",
       "debit": 10937.03,
       "credit": null,
-      "balance": 11821.09,
+      "balance": -91154.67,
       "branch_code": "4156",
       "failed": false
     },
@@ -1664,7 +1686,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 1873.07,
-      "balance": 13694.16,
+      "balance": -89281.6,
       "branch_code": "6738",
       "failed": false
     },
@@ -1675,7 +1697,7 @@
       "cheque_no": "969341",
       "debit": 2868.01,
       "credit": null,
-      "balance": 10826.15,
+      "balance": -92149.61,
       "branch_code": "5749",
       "failed": false
     },
@@ -1686,7 +1708,7 @@
       "cheque_no": "",
       "debit": 147.31,
       "credit": null,
-      "balance": 10678.84,
+      "balance": -92296.92,
       "branch_code": "5749",
       "failed": false
     },
@@ -1697,7 +1719,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 3664.61,
-      "balance": 14343.45,
+      "balance": -88632.31,
       "branch_code": "6738",
       "failed": false
     },
@@ -1708,7 +1730,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 585.87,
-      "balance": 14929.32,
+      "balance": -88046.44,
       "branch_code": "6738",
       "failed": false
     },
@@ -1719,7 +1741,7 @@
       "cheque_no": "834315",
       "debit": 6836.9,
       "credit": null,
-      "balance": 8092.42,
+      "balance": -94883.34,
       "branch_code": "6738",
       "failed": false
     },
@@ -1730,7 +1752,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 775.81,
-      "balance": 8868.23,
+      "balance": -94107.53,
       "branch_code": "3421",
       "failed": false
     },
@@ -1741,7 +1763,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 3255.94,
-      "balance": 12124.17,
+      "balance": -90851.59,
       "branch_code": "5749",
       "failed": false
     },
@@ -1752,7 +1774,7 @@
       "cheque_no": "",
       "debit": 885.56,
       "credit": null,
-      "balance": 11238.61,
+      "balance": -91737.15,
       "branch_code": "6738",
       "failed": false
     },
@@ -1763,7 +1785,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 4367.43,
-      "balance": 15606.04,
+      "balance": -87369.72,
       "branch_code": "3421",
       "failed": false
     },
@@ -1774,7 +1796,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 365.78,
-      "balance": 15971.82,
+      "balance": -87003.94,
       "branch_code": "4156",
       "failed": false
     },
@@ -1785,7 +1807,7 @@
       "cheque_no": "785873",
       "debit": null,
       "credit": 1134.45,
-      "balance": 17106.27,
+      "balance": -85869.49,
       "branch_code": "3421",
       "failed": false
     },
@@ -1796,7 +1818,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 22753.12,
-      "balance": 39859.39,
+      "balance": -63116.37,
       "branch_code": "3421",
       "failed": false
     },
@@ -1807,7 +1829,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 16031.1,
-      "balance": 55890.49,
+      "balance": -47085.27,
       "branch_code": "4156",
       "failed": false
     },
@@ -1818,7 +1840,7 @@
       "cheque_no": "",
       "debit": 11.97,
       "credit": null,
-      "balance": -6325.91,
+      "balance": -47097.24,
       "branch_code": "6738",
       "failed": false
     },
@@ -1829,7 +1851,7 @@
       "cheque_no": "",
       "debit": 21205.89,
       "credit": null,
-      "balance": 34684.6,
+      "balance": -68303.13,
       "branch_code": "6738",
       "failed": false
     },
@@ -1840,7 +1862,7 @@
       "cheque_no": "",
       "debit": 13771.73,
       "credit": null,
-      "balance": 20912.87,
+      "balance": -82074.86,
       "branch_code": "5749",
       "failed": false
     },
@@ -1851,7 +1873,7 @@
       "cheque_no": "",
       "debit": null,
       "credit": 748.95,
-      "balance": 21661.82,
+      "balance": -81325.91,
       "branch_code": "5749",
       "failed": false
     }
