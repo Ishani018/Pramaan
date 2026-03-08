@@ -85,6 +85,12 @@ class SectorBenchmarkAssessor:
                 sector_key = "INFRASTRUCTURE"
 
         result.sector_used = sector_key
+        
+        # Guard: Do not fire sector rules on unknown sector
+        if sector_key == "DEFAULT":
+            result.summary = "Sector unknown — skipping benchmark comparison."
+            return result
+
         benchmarks = SECTOR_BENCHMARKS[sector_key]
 
         target_ebitda_margin = benchmarks["ebitda_margin_pct"]

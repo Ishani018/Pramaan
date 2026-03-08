@@ -54,6 +54,8 @@ FIELD_PATTERNS = {
     },
     "PAT": {
         "patterns": [
+            # Force-prefer "loss for the year amounting to" — highest priority
+            r'(?:loss|profit)\s+for\s+the\s+year\s+amounting\s+to\s+[`₹]?\s*(\([\d,]+\.?\d*\))',
             # Income statement: profit/(loss) for the year
             # Must have 4+ digit number — not "49"
             r'(?:profit|loss)\s*[/\(]?\s*(?:loss)?\s*\)?\s+for\s+the\s+(?:year|period)[\s\S]{0,80}?(\([\d,]{4,}\.?\d*\)|[\d,]{4,}\.?\d*)',
@@ -96,7 +98,7 @@ class FinancialExtractor:
     """
     def __init__(self):
         # Auditor firm name usually follows "For " right before the partner signature
-        self.auditor_pattern = r'(?i)for\s+([a-zA-Z\s&,\.]+chartered\s+accountants|[a-zA-Z\s&,\.]+associates|m/s[\s\.][a-zA-Z\s&,\.]+)'
+        self.auditor_pattern = r'(?i)for\s+([a-zA-Z\s&,\.\-]{5,80}?(?:chartered\s+accountants|associates|llp|&\s+co\.?))'
 
     def extract(self, text: str, year: str) -> Dict[str, Optional[Dict[str, Any]]]:
         full_text = text
@@ -111,20 +113,20 @@ class FinancialExtractor:
             best_snippet = ""
             best_unit = "unknown"
             
-            for pattern in config["patterns"]:
+            for pat_idx, pattern in enumerate(config["patterns"]):
                 matches = re.finditer(pattern, fin_section, re.IGNORECASE)
                 
                 for m in matches:
-                    raw_val_str = m.group(1).replace(',', '')
+                    raw_val_str = m.group(1).replace(',', '').replace('(', '-').replace(')', '')
                     try:
                         raw_val = float(raw_val_str)
                     except ValueError:
                         continue
                     
-                    if raw_val < 10:
+                    if abs(raw_val) < 10:
                         continue
                     
-                    context_window = full_text[max(0, m.start()-100):m.end()+100]
+                    context_window = fin_section[max(0, m.start()-100):m.end()+100]
                     excluded = False
                     for excl in config.get("exclude_patterns", []):
                         if re.search(excl, context_window, re.IGNORECASE):
@@ -141,8 +143,12 @@ class FinancialExtractor:
                     confidence = 0
                     if unit != 'unknown': confidence += 40
                     if re.search(r'[`₹\$]', context_window): confidence += 20
-                    if 10 <= normalized <= 1000000: confidence += 20
+                    if 10 <= abs(normalized) <= 10000000: confidence += 20
                     if re.search(r'page|p\.\d+|\d{1,3}\s*$', context_window, re.IGNORECASE): confidence += 10
+                    # Priority bonus: first pattern = highest priority
+                    if pat_idx == 0: confidence += 50
+                    # Prefer larger absolute values (more likely to be real totals)
+                    if abs(raw_val) > 10000: confidence += 15
                     
                     if confidence > best_confidence:
                         best = normalized
@@ -171,8 +177,11 @@ class FinancialExtractor:
                 }
                 logger.info(f"FinancialExtractor: {field}={best} Cr [{conf_label} conf={best_confidence}] unit={best_unit}")
         
-        # Original Auditor Extraction logic
-        norm_text = re.sub(r'\s+', ' ', text)
+        # Auditor Extraction — search only the last 20% of text
+        # (real auditor signature is near the end of the auditor's report)
+        tail_start = int(len(text) * 0.8)
+        tail_text = text[tail_start:]
+        norm_text = re.sub(r'\s+', ' ', tail_text)
         aud_match = re.search(self.auditor_pattern, norm_text)
         if aud_match:
             firm_name = aud_match.group(1).strip()
@@ -188,34 +197,34 @@ class FinancialExtractor:
                     "snippet": f"...{surrounding}...",
                     "year": year
                 }
-                
         return results
 
     def _get_financial_section(self, full_text: str) -> str:
         text_lower = full_text.lower()
         markers = [
             "statement of profit and loss",
-            "profit and loss account", 
-            "statement of income",
+            "profit and loss account",
             "income statement",
-            "consolidated statement of",
         ]
         for marker in markers:
             idx = text_lower.find(marker)
-            if idx != -1:
-                # Skip TOC — find second occurrence
-                idx2 = text_lower.find(marker, idx + 500)
-                if idx2 != -1:
-                    idx = idx2
-                logger.info(
-                    f"FinancialExtractor: P&L at "
-                    f"idx={idx} via '{marker}'")
-                logger.info(
-                    f"P&L preview: "
-                    f"'{full_text[idx:idx+200]}'")
-                return full_text[idx:idx+20000]
+            if idx == -1:
+                continue
+            # Keep searching until we find an occurrence NOT followed by
+            # page-number-like content (i.e. the actual statement, not TOC)
+            search_from = idx
+            while True:
+                candidate = text_lower.find(marker, search_from)
+                if candidate == -1:
+                    break
+                # Check the 200 chars after this match
+                snippet = text_lower[candidate:candidate + 200]
+                # TOC entries have digits immediately after (page refs)
+                # Real P&L pages have column headers like 'note', 'particulars', 'amount'
+                if any(x in snippet for x in ['particulars', 'note no', 'for the year', 'rupees', '₹']):
+                    logger.info(f"FinancialExtractor: P&L at idx={candidate} via '{marker}'")
+                    return full_text[candidate:candidate + 20000]
+                search_from = candidate + 500
         
-        logger.warning(
-            "FinancialExtractor: P&L section NOT FOUND "
-            "— falling back to full text")
+        logger.warning("FinancialExtractor: P&L section NOT FOUND — falling back to full text")
         return full_text

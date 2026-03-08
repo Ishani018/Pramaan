@@ -140,15 +140,15 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
         frun.font.color.rgb = _rgb(GREY)
 
     # ── VARIABLES ─────────────────────────────────────────────────────────────
-    entity_name = data.get("entity_name", "Acme Steels Pvt Ltd")
-    decision_d  = data.get("decision", {})
-    triggered   = data.get("triggered_rules", [])
-    karza       = data.get("karza", {})
-    perfios     = data.get("perfios", {})
-    pdf_scan    = data.get("pdf_scan", {})
-    news_data   = data.get("news_data", {})
-    restate     = data.get("restatement_data", {})
-    site_visit  = data.get("site_visit_scan", {})
+    entity_name = data.get("entity_name") or "Acme Steels Pvt Ltd"
+    decision_d  = data.get("decision") or {}
+    triggered   = data.get("triggered_rules") or []
+    karza       = data.get("karza") or {}
+    perfios     = data.get("perfios") or {}
+    pdf_scan    = data.get("pdf_scan") or {}
+    news_data   = data.get("news_data") or {}
+    restate     = data.get("restatement_data") or {}
+    site_visit  = data.get("site_visit_scan") or {}
     
     # Reconstruct extracted figures
     figs = pdf_scan.get("extracted_figures", {}) if pdf_scan else {}
@@ -165,7 +165,8 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     # ── SECTION 1: EXECUTIVE SUMMARY ──────────────────────────────────────────
     _add_section_header(doc, "SECTION 1: EXECUTIVE SUMMARY")
     
-    cin_display = mca_data.get("cin", "") if mca_data else ""
+    mca_data_dict = data.get("mca_data", {}) or {}
+    cin_display = mca_data_dict.get("cin", "") if mca_data_dict else ""
     
     _add_body_para(doc, f"Entity Name: {entity_name}")
     _add_body_para(doc, f"CIN: {cin_display or 'Not found in document'}")

@@ -411,12 +411,35 @@ async def analyze_report(request: Request):
                     entity_name = extract_entity_name(file_obj.filename, first_page_text)
                     # ==========================================
                     
+                    # --- Fallback entity name from PDF text ---
+                    fallback_entity_name = None
+                    try:
+                        first_3k = first_page_text[:3000]
+                        # Look for "<Company Name>\n...Annual Report"
+                        ar_match = re.search(
+                            r'([A-Z][A-Za-z\s&\-\.]{4,60})\s*\n[^\n]*(?:Annual\s+Report|ANNUAL\s+REPORT)',
+                            first_3k
+                        )
+                        if ar_match:
+                            candidate = ar_match.group(1).strip()
+                            # Skip dates and generic words
+                            if not re.search(r'(20\d{2}|\bFY\d{2}\b|Integrated|Statutory|Financial)', candidate, re.IGNORECASE):
+                                fallback_entity_name = candidate
+                                logger.info(f"Fallback entity name from PDF text: '{fallback_entity_name}'")
+                    except Exception:
+                        pass
+                    
                     # If the extracted name is too generic (like "annual-report") but MCA found the real company name, use the MCA name!
                     if getattr(mca_data, "company_name", None):
                         lower_name = entity_name.lower()
                         if "annual" in lower_name or "report" in lower_name or len(entity_name) < 4:
                             logger.info(f"Overriding generic entity name '{entity_name}' with MCA name '{mca_data.company_name}'")
                             entity_name = mca_data.company_name.title()
+                    elif fallback_entity_name:
+                        lower_name = entity_name.lower()
+                        if "annual" in lower_name or "report" in lower_name or len(entity_name) < 4:
+                            logger.info(f"MCA unavailable — using fallback entity name '{fallback_entity_name}'")
+                            entity_name = fallback_entity_name
 
                     # Update the external mocks with the real entity name
                     from app.api.v1.external_mocks import set_entity, EntityUpdate
