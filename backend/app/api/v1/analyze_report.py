@@ -46,6 +46,7 @@ from app.agents.deep_reader.bank_statement_analyzer import BankStatementAnalyzer
 from app.agents.external.sector_benchmark import SectorBenchmarkAssessor
 from app.agents.deep_reader.collateral_assessor import CollateralAssessor
 from app.agents.external.ecourts_scanner import ECourtsScanner
+from app.agents.external.counterparty_intel import CounterpartyIntel, NetworkIntelResult
 import os
 from app.core.config import settings
 
@@ -124,6 +125,7 @@ async def analyze_report(request: Request):
         ecourts_data = None
         shareholding_data = None
         bank_result = None
+        counterparty_result = None
 
         # Extract all uploaded files (e.g. file_fy24, file_fy23)
         files = {
@@ -615,6 +617,43 @@ async def analyze_report(request: Request):
             from app.agents.deep_reader.bank_statement_analyzer import BankStatementResult
             bank_result = BankStatementResult()
         
+        # ── Step 6.6: Counterparty Intelligence ─────────────────────────────────
+        try:
+            if bank_result and bank_result.top_counterparties:
+                cp_intel = CounterpartyIntel()
+                applicant_directors = getattr(mca_data, "directors", []) if mca_data else []
+                # Normalize director list — may be list of dicts or strings
+                dir_names = []
+                for d in applicant_directors:
+                    if isinstance(d, dict):
+                        dir_names.append(d.get("name", ""))
+                    elif isinstance(d, str):
+                        dir_names.append(d)
+
+                applicant_addr = getattr(mca_data, "registered_address", "") if mca_data else ""
+                applicant_cin = getattr(mca_data, "cin", "") if mca_data else ""
+
+                counterparty_result = await run_in_threadpool(
+                    cp_intel.analyze,
+                    counterparties=bank_result.top_counterparties,
+                    applicant_directors=dir_names,
+                    applicant_address=applicant_addr,
+                    applicant_name=entity_name,
+                    applicant_cin=applicant_cin,
+                )
+                logger.info(
+                    f"[{elapsed()}] CounterpartyIntel done — "
+                    f"{len(counterparty_result.counterparty_profiles)} profiles, "
+                    f"{len(counterparty_result.relationship_flags)} flags, "
+                    f"circular={counterparty_result.circular_trading_detected}, "
+                    f"rules={counterparty_result.triggered_rules}"
+                )
+            else:
+                counterparty_result = NetworkIntelResult()
+        except Exception as e:
+            logger.exception(f"CounterpartyIntel failed: {e}")
+            counterparty_result = NetworkIntelResult()
+
         # ── Step 6.8: Sector Benchmark Assessor ──────────────────────────────────
         try:
             sector_assessor = SectorBenchmarkAssessor()
@@ -651,7 +690,14 @@ async def analyze_report(request: Request):
             for rule in mca_data.triggered_rules:
                 if rule not in all_triggered_rules:
                     all_triggered_rules.append(rule)
-        
+
+        # ── Merge CounterpartyIntel triggered_rules (P-06) ────────────────────
+        if counterparty_result and counterparty_result.triggered_rules:
+            logger.info(f"CounterpartyIntel triggered_rules: {counterparty_result.triggered_rules}")
+            for rule in counterparty_result.triggered_rules:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+
         # ── Merge NewsScanner triggered_rules (P-13) ─────────────────────────
         news_data = latest_scan.get("news_data")
         if news_data and news_data.get("triggered_rules"):
@@ -677,7 +723,7 @@ async def analyze_report(request: Request):
                 content={
                     **latest_scan,
                     "message": "Neither the Independent Auditor's Report nor its Annexure could be located.",
-                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=news_data, site_visit_scan={"triggered_rules": site_visit_result.triggered_rules}, mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None),
+                    "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=news_data, site_visit_scan={"triggered_rules": site_visit_result.triggered_rules}, mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None, counterparty_intel={"triggered_rules": counterparty_result.triggered_rules} if counterparty_result else None),
                     "per_year_scans": per_year_scans,
                     "restatement_data": restatement_data,
                 }
@@ -685,12 +731,13 @@ async def analyze_report(request: Request):
 
         decision = orchestrate_decision(
             pdf_scan_result=latest_scan,
-            perfios_data=None,      
-            karza_data=None,        
+            perfios_data=None,
+            karza_data=None,
             restatement_data=restatement_data,
             news_data=news_data,
             site_visit_scan={"triggered_rules": site_visit_result.triggered_rules},
-            mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None
+            mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None,
+            counterparty_intel={"triggered_rules": counterparty_result.triggered_rules} if counterparty_result else None,
         )
         logger.info(f"[{elapsed()}] Orchestrator done")
 
@@ -779,6 +826,42 @@ async def analyze_report(request: Request):
                 "top_counterparties": bank_result.top_counterparties if bank_result else [],
                 "findings": bank_result.findings if bank_result else [],
                 "triggered_rules": bank_result.triggered_rules if bank_result else [],
+            },
+            "counterparty_intel": {
+                "circular_trading_detected": counterparty_result.circular_trading_detected if counterparty_result else False,
+                "network_graph": counterparty_result.network_graph if counterparty_result else {"nodes": [], "links": []},
+                "relationship_flags": [
+                    {
+                        "flag_type": f.flag_type,
+                        "severity": f.severity,
+                        "entity_a": f.entity_a,
+                        "entity_b": f.entity_b,
+                        "evidence": f.evidence,
+                        "details": f.details,
+                    }
+                    for f in (counterparty_result.relationship_flags if counterparty_result else [])
+                ],
+                "counterparty_profiles": [
+                    {
+                        "name": p.name,
+                        "total_volume": p.total_volume,
+                        "debit_volume": p.debit_volume,
+                        "credit_volume": p.credit_volume,
+                        "txn_count": p.txn_count,
+                        "mca_found": p.mca_found,
+                        "cin": p.cin,
+                        "company_status": p.company_status,
+                        "registered_address": p.registered_address,
+                        "business_activity": p.business_activity,
+                        "paid_up_capital": p.paid_up_capital,
+                        "is_shell_suspect": p.is_shell_suspect,
+                        "shell_reasons": p.shell_reasons,
+                    }
+                    for p in (counterparty_result.counterparty_profiles if counterparty_result else [])
+                ],
+                "findings": counterparty_result.findings if counterparty_result else [],
+                "triggered_rules": counterparty_result.triggered_rules if counterparty_result else [],
+                "total_lookups": counterparty_result.total_lookups if counterparty_result else 0,
             },
             "ecourts": latest_scan.get("ecourts_data") or {
                 "cases_found": 0,

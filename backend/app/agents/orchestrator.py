@@ -204,6 +204,14 @@ RULE_DEFINITIONS = {
         "limit_reduction_pct": 10,
         "description": "Credit rating below investment grade or recent downgrade detected",
     },
+    "P-06": {
+        "name": "FRAUD-01: Circular Trading Network",
+        "trigger_description": "Counterparty intelligence detected shared directors, shell companies, or circular money flows among transaction parties",
+        "rate_penalty_bps": 200,
+        "limit_reduction_pct": 30,
+        "requires_manual_review": True,
+        "severity": "CRITICAL",
+    },
     "P-28": {
         "name": "BANK-02: Circular Bank Transactions",
         "severity": "HIGH",
@@ -236,6 +244,7 @@ def orchestrate_decision(
     news_data: Dict[str, Any] | None = None,
     site_visit_scan: Dict[str, Any] | None = None,
     mca_data: Dict[str, Any] | None = None,
+    counterparty_intel: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Aggregate all signals and compute the final credit decision.
@@ -300,6 +309,12 @@ def orchestrate_decision(
     # ── P-14: MCA Scanner ─────────────────────────────────────────────────────
     if mca_data and mca_data.get("triggered_rules"):
         for rule in mca_data["triggered_rules"]:
+            if rule not in triggered:
+                triggered.append(rule)
+
+    # ── P-06: Counterparty Intelligence (Circular Trading Network) ────────────
+    if counterparty_intel and counterparty_intel.get("triggered_rules"):
+        for rule in counterparty_intel["triggered_rules"]:
             if rule not in triggered:
                 triggered.append(rule)
 
@@ -488,6 +503,9 @@ def _describe_finding(
     if rule_id == "P-10" and restatement_data:
         history = restatement_data.get("auditor_history", {})
         return f"auditor changed across reporting periods (history: {list(history.values())})"
+
+    if rule_id == "P-06":
+        return "counterparty intelligence detected circular trading network — shared directors, shell entities, or related-party round-trips among bank statement counterparties"
 
     if rule_id == "P-02":
         return "related-party outflows to director-connected entities flagged"

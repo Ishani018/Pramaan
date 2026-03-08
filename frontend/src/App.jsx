@@ -80,7 +80,7 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
         'P-01': { name: RULE_DISPLAY_NAMES['P-01'], bps: 100, cut: 10, manual: false, trigger: 'GSTR-2A vs 3B mismatch > 15% (Perfios)' },
         'P-03': { name: RULE_DISPLAY_NAMES['P-03'], bps: 150, cut: 20, manual: false, trigger: 'CARO 2020 Clause (vii) / auditor qualification' },
         'P-04': { name: RULE_DISPLAY_NAMES['P-04'], bps: 75, cut: 0, manual: true, trigger: 'Going concern or material uncertainty flagged' },
-        'P-06': { name: RULE_DISPLAY_NAMES['P-06'], bps: 0, cut: 50, manual: false, trigger: 'Circular trading loop detected via network graph (Acme → Vertex → Nova → Acme)' },
+        'P-06': { name: RULE_DISPLAY_NAMES['P-06'], bps: 200, cut: 30, manual: true, trigger: 'Counterparty intelligence detected shared directors, shell companies, or circular money flows' },
         'P-09': { name: RULE_DISPLAY_NAMES['P-09'], bps: 200, cut: 40, manual: true, trigger: 'Prior year financial comparative figures restated by >2%' },
         'P-10': { name: RULE_DISPLAY_NAMES['P-10'], bps: 75, cut: 10, manual: true, trigger: 'Change in statutory auditor detected across reporting periods' },
         'P-13': { name: RULE_DISPLAY_NAMES['P-13'], bps: 50, cut: 0, manual: true, trigger: 'NewsScanner found high-severity red flags (fraud, ED raid, etc.)' },
@@ -284,28 +284,43 @@ export default function App() {
                 formData.append("bank_csv", bankCsvFile)
             }
 
-            const [pdfResp, perfiosResp, karzaResp, networkResp, cibilResp] = await Promise.all([
+            const [pdfResp, perfiosResp, karzaResp, cibilResp] = await Promise.all([
                 axios.post('/api/v1/analyze-report', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
                     timeout: 180_000,
                 }),
                 axios.get('/api/v1/mock/perfios', { timeout: 180_000 }),
                 axios.get('/api/v1/mock/karza', { timeout: 180_000 }),
-                axios.get('/api/v1/mock/network-graph', { timeout: 180_000 }),
                 axios.get('/api/v1/mock/cibil', { timeout: 180_000 }),
             ])
 
             setPdfResult(pdfResp.data)
             setPerfiosData(perfiosResp.data)
             setKarzaData(karzaResp.data)
-            setNetworkData(networkResp.data)
             setCibilData(cibilResp.data)
 
+            // Network data now comes from the analysis response (counterparty intelligence)
+            const cpIntel = pdfResp.data.counterparty_intel
+            if (cpIntel && cpIntel.network_graph) {
+                setNetworkData({
+                    ...cpIntel.network_graph,
+                    circular_trading_detected: cpIntel.circular_trading_detected,
+                    relationship_flags: cpIntel.relationship_flags || [],
+                    counterparty_profiles: cpIntel.counterparty_profiles || [],
+                    findings: cpIntel.findings || [],
+                })
+            } else {
+                setNetworkData(null)
+            }
+
             // Auto-jump to waterfall if any rule triggered
+            const cpIntelForDecision = cpIntel ? {
+                circular_trading_detected: cpIntel.circular_trading_detected,
+            } : null
             const pendingDecision = orchestrateDecision(
                 pdfResp.data,
                 perfiosResp.data,
-                networkResp.data,
+                cpIntelForDecision,
                 pdfResp.data.restatement_data
             )
 
@@ -871,7 +886,7 @@ export default function App() {
                                     <ComplianceHeatmap result={pdfResult} />
                                 )}
                                 {activeTab === 'network' && (
-                                    <NetworkAnalysis />
+                                    <NetworkAnalysis data={networkData} />
                                 )}
                                 {activeTab === 'bank-statement' && (
                                     <BankStatementPanel bankData={pdfResult?.bank_statement} />

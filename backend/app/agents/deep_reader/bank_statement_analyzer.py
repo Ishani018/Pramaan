@@ -285,15 +285,27 @@ class BankStatementAnalyzer:
         return None
 
     def _get_top_counterparties(self, transactions: List[Dict]) -> List[Dict]:
-        """Get top 5 counterparties by total volume."""
-        volumes = defaultdict(float)
+        """Get top 10 counterparties by total volume with debit/credit breakdown."""
+        volumes = defaultdict(lambda: {"debit": 0.0, "credit": 0.0, "count": 0})
         for t in transactions:
             party = self._extract_party(t["description"])
             if party:
-                volumes[party] += t["debit"] + t["credit"]
+                volumes[party]["debit"] += t["debit"]
+                volumes[party]["credit"] += t["credit"]
+                volumes[party]["count"] += 1
 
-        sorted_parties = sorted(volumes.items(), key=lambda x: x[1], reverse=True)
+        sorted_parties = sorted(
+            volumes.items(),
+            key=lambda x: x[1]["debit"] + x[1]["credit"],
+            reverse=True,
+        )
         return [
-            {"party": p, "total_volume": round(v, 2)}
-            for p, v in sorted_parties[:5]
+            {
+                "party": p,
+                "total_volume": round(v["debit"] + v["credit"], 2),
+                "debit_volume": round(v["debit"], 2),
+                "credit_volume": round(v["credit"], 2),
+                "txn_count": v["count"],
+            }
+            for p, v in sorted_parties[:10]
         ]
