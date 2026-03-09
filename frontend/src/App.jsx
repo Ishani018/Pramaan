@@ -358,7 +358,7 @@ export default function App() {
             }
 
             if (pendingDecision.triggered_rules.length > 0) {
-                setTimeout(() => setActiveTab('waterfall'), 1100)
+                setTimeout(() => setActiveTab('decision'), 1100)
             }
         } catch (err) {
             const msg = err.response?.data?.detail || err.message || 'Unexpected error'
