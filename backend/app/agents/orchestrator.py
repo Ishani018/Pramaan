@@ -541,4 +541,6 @@ def _describe_finding(
 
     # Fallback: use the trigger_description from RULE_DEFINITIONS
     rule = RULE_DEFINITIONS.get(rule_id)
-    return rule["trigger_description"] if rule else "unknown trigger"
+    if not rule:
+        return "unknown trigger"
+    return rule.get("trigger_description") or rule.get("description") or rule.get("name", "unknown trigger")
