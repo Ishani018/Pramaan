@@ -1,15 +1,29 @@
-/**
- * PDFViewer – Left-panel PDF upload and viewer
- * Drag-and-drop zone that previews the most recently uploaded PDF in an iframe.
- * Shows a row of cards for up to 4 uploaded PDFs, allowing year label edits.
- */
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { Upload, FileText, X } from 'lucide-react'
 
-export default function PDFViewer({ onFilesChange, isAnalyzing, analyzedData }) {
+const PDFViewer = forwardRef(({ onFilesChange, isAnalyzing, analyzedData }, ref) => {
     const [dragActive, setDragActive] = useState(false)
     const [files, setFiles] = useState([]) // Array of { id, file, url, yearLabel }
     const fileInputRef = useRef(null)
+    const iframeRef = useRef(null)
+
+    useImperativeHandle(ref, () => ({
+        getIframe: () => iframeRef.current,
+        addFile: (file, yearLabel) => {
+            const newFileObj = {
+                id: Math.random().toString(36).substr(2, 9),
+                file,
+                url: URL.createObjectURL(file),
+                yearLabel: yearLabel || `FY${24 - files.length}`
+            }
+            setFiles(prev => {
+                const updated = [newFileObj, ...prev].slice(0, 4)
+                updated.sort((a, b) => b.yearLabel.localeCompare(a.yearLabel))
+                onFilesChange(updated)
+                return updated
+            })
+        }
+    }))
 
     const handleFiles = useCallback((incomingList) => {
         if (!incomingList || incomingList.length === 0) return
@@ -126,7 +140,7 @@ export default function PDFViewer({ onFilesChange, isAnalyzing, analyzedData }) 
                                         <p className="font-serif font-bold text-ink text-base truncate">{f.file.name}</p>
                                         {pdfType && (
                                             <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 border ${pdfType === 'text'
-                                                ? 'border-green-600 text-green-700 bg-green-50'
+                                                ? 'border-green text-green bg-green/10'
                                                 : 'border-[#D4A017] text-[#D4A017] bg-[#FFF8E7]'
                                                 }`}>
                                                 {pdfType === 'text' ? 'Text PDF' : 'Scanned — OCR'}
@@ -160,4 +174,6 @@ export default function PDFViewer({ onFilesChange, isAnalyzing, analyzedData }) 
 
         </div>
     )
-}
+})
+
+export default PDFViewer

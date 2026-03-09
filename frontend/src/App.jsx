@@ -8,7 +8,7 @@
  *   4. orchestrate_decision()           → unified penalty decision (client-side mirror)
  *   5. POST /api/v1/export-cam          → Download .docx CAM memo
  */
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import axios from 'axios'
 import {
     Brain, Shield, ChevronRight, AlertCircle, Download,
@@ -26,6 +26,7 @@ import TrendPanel from './components/TrendPanel'
 import BankStatementPanel from './components/BankStatementPanel'
 import SectorBenchmarkPanel from './components/SectorBenchmarkPanel'
 import CrossVerificationPanel from './components/CrossVerificationPanel'
+import BSESearch from './components/BSESearch'
 
 export const RULE_DISPLAY_NAMES = {
     "P-01": "GST-01: Revenue Mismatch",
@@ -142,11 +143,11 @@ const PROGRESS_STEPS = [
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
-    { id: 'decision',     label: 'Decision',     icon: BarChart2 },
-    { id: 'compliance',   label: 'Compliance',   icon: ShieldAlert },
-    { id: 'cross-verify', label: 'Verify',       icon: ShieldCheck },
+    { id: 'decision', label: 'Decision', icon: BarChart2 },
+    { id: 'compliance', label: 'Compliance', icon: ShieldAlert },
+    { id: 'cross-verify', label: 'Verify', icon: ShieldCheck },
     { id: 'intelligence', label: 'Intelligence', icon: Network },
-    { id: 'financials',   label: 'Financials',   icon: TrendingUp },
+    { id: 'financials', label: 'Financials', icon: TrendingUp },
 ]
 
 const ALL_RULES = [
@@ -250,6 +251,13 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('decision')
     const [bureauLoading, setBureauLoading] = useState(false)
     const [progressStepIdx, setProgressStepIdx] = useState(0)
+    const pdfRef = useRef(null)
+
+    const handlePdfFetched = useCallback((file, yearLabel) => {
+        if (pdfRef.current) {
+            pdfRef.current.addFile(file, yearLabel)
+        }
+    }, [])
 
     const handleFilesChange = useCallback((files) => {
         setSelectedFiles(files)
@@ -471,7 +479,8 @@ export default function App() {
 
                 {/* ── LEFT: Upload + Bureau cards + Notes ──────────────────────────── */}
                 <section className="lg:w-[42%] w-full flex-shrink-0 border-r-[3px] border-border p-6 overflow-y-auto flex flex-col gap-5 bg-paper">
-                    <PDFViewer onFilesChange={handleFilesChange} isAnalyzing={loading} />
+                    <BSESearch onPdfFetched={handlePdfFetched} />
+                    <PDFViewer ref={pdfRef} onFilesChange={handleFilesChange} isAnalyzing={loading} analyzedData={pdfResult} />
 
                     {/* Bank Statement CSV Upload */}
                     <div className="border-t-2 border-border pt-4">

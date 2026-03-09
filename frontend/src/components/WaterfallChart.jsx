@@ -36,11 +36,11 @@ const VERDICT_CONFIG = {
     },
 }
 
-function RateBar({ base, final, label }) {
+function RateBar({ base, final, label, higherIsBetter = false }) {
     const max = Math.max(final, base) * 1.2
     const basePct = (base / max) * 100
     const finalPct = (final / max) * 100
-    const increased = final > base
+    const isBad = higherIsBetter ? (final < base) : (final > base)
 
     return (
         <div className="flex flex-col gap-2">
@@ -49,7 +49,7 @@ function RateBar({ base, final, label }) {
                 <div className="flex items-center gap-2 text-xs font-mono">
                     <span className="text-muted">{base.toFixed(1)}</span>
                     <ArrowRight size={10} className="text-muted" />
-                    <span className={`font-bold ${increased ? 'text-red' : 'text-green'}`}>
+                    <span className={`font-bold ${isBad ? 'text-red' : 'text-green'}`}>
                         {final.toFixed(label === 'Interest Rate' ? 2 : 1)}
                         {label === 'Interest Rate' ? '%' : ' Cr'}
                     </span>
@@ -61,7 +61,7 @@ function RateBar({ base, final, label }) {
                     style={{ width: `${basePct}%` }}
                 />
                 <div
-                    className={`absolute inset-y-0 left-0 ${increased ? 'bg-red/70' : 'bg-green/70'}`}
+                    className={`absolute inset-y-0 left-0 ${isBad ? 'bg-red/70' : 'bg-green/70'}`}
                     style={{ width: `${finalPct}%` }}
                 />
             </div>
@@ -128,7 +128,7 @@ export default function WaterfallChart({ decision }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                     <RateBar base={BASE_RATE} final={finalRate} label="Interest Rate" />
-                    <RateBar base={BASE_LIMIT} final={finalLimit} label="Credit Limit (₹ Cr)" />
+                    <RateBar base={BASE_LIMIT} final={finalLimit} label="Credit Limit (₹ Cr)" higherIsBetter={true} />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 mt-5 pt-4 border-t-2 border-border">
