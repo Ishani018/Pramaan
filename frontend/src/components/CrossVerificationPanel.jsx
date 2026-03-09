@@ -134,9 +134,10 @@ export default function CrossVerificationPanel({ data, claims }) {
                                         <p className="text-sm font-mono text-ink font-bold mb-1">
                                             {check.finding}
                                         </p>
-                                        <p className="text-xs font-serif text-muted leading-relaxed">
+                                        <p className="text-xs font-serif text-muted leading-relaxed whitespace-pre-wrap">
                                             {check.detail}
                                         </p>
+
                                     </div>
                                 </div>
                             </div>

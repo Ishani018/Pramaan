@@ -144,47 +144,78 @@ class BankStatementAnalyzer:
 
         for row in reader:
             try:
-                # Flexible date parsing
+                # 1. Flexible date/timestamp parsing
                 date_str = (
-                    row.get("Date", "") or row.get("date", "") or
-                    row.get("Transaction Date", "") or row.get("Txn Date", "")
+                    row.get("transactionTimestamp") or 
+                    row.get("transactionDate") or
+                    row.get("valueDate") or
+                    row.get("Date") or row.get("date") or
+                    row.get("Transaction Date") or row.get("Txn Date") or ""
                 ).strip()
                 date = self._parse_date(date_str)
 
+                # 2. Flexible description/narration parsing
                 desc = (
-                    row.get("Description", "") or row.get("description", "") or
-                    row.get("Particulars", "") or row.get("Narration", "")
+                    row.get("narration") or
+                    row.get("Description") or row.get("description") or
+                    row.get("Particulars") or row.get("Narration") or ""
                 ).strip()
 
-                debit = self._parse_amount(
-                    row.get("Debit", "") or row.get("debit", "") or
-                    row.get("Withdrawal", "") or "0"
-                )
-                credit = self._parse_amount(
-                    row.get("Credit", "") or row.get("credit", "") or
-                    row.get("Deposit", "") or "0"
-                )
+                # 3. Flexible debit/credit logic (handle 'type' + 'amount' or direct columns)
+                txn_type = (row.get("type") or "").upper().strip()
+                amount_val = self._parse_amount(row.get("amount") or "0")
+
+                if txn_type == "DEBIT":
+                    debit, credit = amount_val, 0.0
+                elif txn_type == "CREDIT":
+                    debit, credit = 0.0, amount_val
+                else:
+                    # Fallback to direct debit/credit columns
+                    debit = self._parse_amount(
+                        row.get("Debit") or row.get("debit") or
+                        row.get("Withdrawal") or "0"
+                    )
+                    credit = self._parse_amount(
+                        row.get("Credit") or row.get("credit") or
+                        row.get("Deposit") or "0"
+                    )
+
+                # 4. Flexible balance parsing
                 balance = self._parse_amount(
-                    row.get("Balance", "") or row.get("balance", "") or
-                    row.get("Closing Balance", "") or "0"
+                    row.get("currentBalance") or
+                    row.get("Balance") or row.get("balance") or
+                    row.get("Closing Balance") or "0"
                 )
 
-                transactions.append({
-                    "date": date,
-                    "date_str": date_str,
-                    "description": desc,
-                    "debit": debit,
-                    "credit": credit,
-                    "balance": balance,
-                })
-            except Exception:
+                if date:
+                    transactions.append({
+                        "date": date,
+                        "date_str": date_str,
+                        "description": desc,
+                        "debit": debit,
+                        "credit": credit,
+                        "balance": balance,
+                        "txn_id": row.get("txnId") or row.get("reference"),
+                        "mode": row.get("mode")
+                    })
+            except Exception as e:
+                logger.debug(f"Row skip: {e}")
                 continue
 
         return transactions
 
     def _parse_date(self, date_str: str) -> Optional[datetime]:
-        """Try multiple date formats."""
-        for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%b-%Y", "%d %b %Y"]:
+        """Try multiple date formats including ISO timestamps."""
+        if not date_str:
+            return None
+            
+        # Try ISO format first (common for timestamps)
+        try:
+            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            pass
+
+        for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%b-%Y", "%d %b %Y", "%Y-%m-%dT%H:%M:%S"]:
             try:
                 return datetime.strptime(date_str, fmt)
             except ValueError:

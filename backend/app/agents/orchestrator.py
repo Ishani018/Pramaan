@@ -249,6 +249,14 @@ RULE_DEFINITIONS = {
         "requires_manual_review": True,
         "description": "Annual report compliance claims contradicted by external bureau data",
     },
+    "P-33": {
+        "name": "RECON-01: GST-Bank Turnover Mismatch",
+        "severity": "HIGH",
+        "rate_penalty_bps": 125,
+        "limit_reduction_pct": 20,
+        "requires_manual_review": True,
+        "description": "High variance detected between GST turnover and bank statement credits",
+    },
 }
 
 
