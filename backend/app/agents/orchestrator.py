@@ -233,6 +233,22 @@ RULE_DEFINITIONS = {
         "limit_reduction_pct": 10,
         "description": "Company underperforming sector benchmarks by >25% on key margin ratios",
     },
+    "P-31": {
+        "name": "XVER-01: Revenue Verification Mismatch",
+        "severity": "HIGH",
+        "rate_penalty_bps": 100,
+        "limit_reduction_pct": 15,
+        "requires_manual_review": True,
+        "description": "Cross-verification found claimed revenue not supported by bank deposits or GST data",
+    },
+    "P-32": {
+        "name": "XVER-02: Compliance Claim Contradicted",
+        "severity": "HIGH",
+        "rate_penalty_bps": 75,
+        "limit_reduction_pct": 10,
+        "requires_manual_review": True,
+        "description": "Annual report compliance claims contradicted by external bureau data",
+    },
 }
 
 
@@ -245,6 +261,7 @@ def orchestrate_decision(
     site_visit_scan: Dict[str, Any] | None = None,
     mca_data: Dict[str, Any] | None = None,
     counterparty_intel: Dict[str, Any] | None = None,
+    cross_verification: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Aggregate all signals and compute the final credit decision.
@@ -332,6 +349,12 @@ def orchestrate_decision(
             for rule in shareholding_data.triggered_rules:
                 if rule not in triggered:
                     triggered.append(rule)
+
+    # ── P-31 & P-32: Cross-Verification Mismatches ────────────────────────────
+    if cross_verification and cross_verification.get("triggered_rules"):
+        for rule in cross_verification["triggered_rules"]:
+            if rule not in triggered:
+                triggered.append(rule)
 
     # ── Apply penalties ───────────────────────────────────────────────────────
     rate  = BASE_RATE_PCT

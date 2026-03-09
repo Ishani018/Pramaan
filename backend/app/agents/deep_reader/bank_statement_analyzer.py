@@ -57,6 +57,7 @@ class BankStatementResult:
     top_counterparties: List[Dict[str, Any]] = field(default_factory=list)
     findings: List[str] = field(default_factory=list)
     triggered_rules: List[str] = field(default_factory=list)
+    transactions: List[Dict[str, Any]] = field(default_factory=list)  # raw txns with _party tag
 
 
 class BankStatementAnalyzer:
@@ -117,8 +118,15 @@ class BankStatementAnalyzer:
                 f"{len(result.cash_spikes)} cash spikes near filing dates"
             )
 
+        # Tag each transaction with extracted party name (for counterparty intel)
+        for t in transactions:
+            t["_party"] = self._extract_party(t["description"])
+
         # Top counterparties
         result.top_counterparties = self._get_top_counterparties(transactions)
+
+        # Store tagged transactions for downstream use (counterparty intel flow analysis)
+        result.transactions = transactions
 
         logger.info(
             f"BankStatementAnalyzer: {result.total_transactions} txns, "
@@ -271,17 +279,98 @@ class BankStatementAnalyzer:
         return spikes[:10]
 
     def _extract_party(self, description: str) -> Optional[str]:
-        """Extract counterparty name from transaction description."""
+        """
+        Extract counterparty name from transaction description.
+        Handles both slash-delimited (NEFT/BANK/PARTY) and dash-delimited
+        (NEFT Dr-REFNUM-IFSC-PARTY) formats common in Indian bank statements.
+        """
         desc = description.upper().strip()
-        # Common patterns: "NEFT/..../PARTY NAME", "RTGS/..../PARTY"
-        for prefix in ["NEFT", "RTGS", "IMPS", "UPI", "TRF"]:
-            if prefix in desc:
-                parts = desc.split("/")
-                if len(parts) >= 3:
-                    return parts[-1].strip()[:30]
-        # Fallback: use first 20 chars of description
-        if len(desc) > 5:
-            return desc[:20].strip()
+
+        # Skip non-counterparty transactions
+        skip_kw = ["SERVICE CHARGE", "ATM WDL", "ATM CASH", "REVERSAL",
+                    "INTEREST ", "SMS ALERT", "DEMAT", "ONLINE BANKING",
+                    "NEFT/RTGS CHARGE"]
+        if any(kw in desc for kw in skip_kw):
+            return None
+
+        # Skip cash self-deposits
+        if "CASH" in desc and "SELF" in desc:
+            return None
+
+        # --- UPI: UPI/DR/refnum/PARTY/... or UPI/CR/refnum/PARTY/... ---
+        if desc.startswith("UPI/") or desc.startswith("UPI-"):
+            parts = desc.split("/")
+            if len(parts) >= 4:
+                # Party is at index 3 (UPI/DR/refnum/PARTY/...)
+                party = parts[3].strip()
+                if len(party) > 2:
+                    return party[:40]
+
+        # --- NEFT / RTGS: dash-delimited (most common in real statements) ---
+        # Format: "NEFT Dr-REFNUM-IFSC-PARTY NAME--" or "RTGS Cr-REFID-IFSC-PARTY-/NONE"
+        for prefix in ["NEFT", "RTGS"]:
+            if not desc.startswith(prefix):
+                continue
+
+            # Try slash-delimited first (legacy format: NEFT/BANK/PARTY)
+            slash_parts = desc.split("/")
+            if len(slash_parts) >= 3:
+                candidate = slash_parts[-1].strip().rstrip("-")
+                # Avoid returning junk like "NONE" or "URGENT"
+                if len(candidate) > 3 and candidate not in ("NONE", "URGENT"):
+                    return candidate[:40]
+
+            # Dash-delimited: NEFT Dr-REFNUM-IFSC-PARTY NAME
+            dash_parts = desc.split("-")
+            if len(dash_parts) >= 4:
+                # Party name is everything from the 4th segment onward
+                party = "-".join(dash_parts[3:]).strip().rstrip("-").strip()
+                # Clean trailing suffixes
+                for suffix in ["/NONE", "/URGENT/", "/URGENT", "--"]:
+                    party = party.replace(suffix, "").strip()
+                party = party.strip("-").strip()
+                if len(party) > 2:
+                    return party[:40]
+            return None
+
+        # --- IMPS: "IMPS Dr-REFNUM-PARTY" or "IMPS BRN SALARY TRF BY-COMPANY" ---
+        if "IMPS" in desc:
+            if "SALARY TRF BY-" in desc:
+                party = desc.split("SALARY TRF BY-")[-1].strip()
+                return party[:40] if len(party) > 2 else None
+            dash_parts = desc.split("-")
+            if len(dash_parts) >= 3:
+                return dash_parts[-1].strip()[:40]
+
+        # --- Clearing: "By Clg:..., COMPANY NAME" ---
+        if desc.startswith("BY CLG"):
+            if "," in desc:
+                party = desc.split(",")[-1].strip()
+                return party[:40] if len(party) > 2 else None
+
+        # --- Cheque: "Chq Paid-MICR Inward Clearing-PERSON-BANK" ---
+        if "CHQ PAID" in desc or "CHEQUE" in desc:
+            dash_parts = desc.split("-")
+            if len(dash_parts) >= 3:
+                return dash_parts[2].strip()[:40]
+
+        # --- Dividend: "Dividend Cr-COMPANY-EQUITY SHARES" ---
+        if "DIVIDEND" in desc:
+            dash_parts = desc.split("-")
+            if len(dash_parts) >= 2:
+                return dash_parts[1].strip()[:40]
+
+        # --- Cash withdrawal (not self): "Cash Withdrawal-PERSON" ---
+        if desc.startswith("CASH"):
+            dash_parts = desc.split("-")
+            if len(dash_parts) >= 2:
+                return dash_parts[-1].strip()[:30]
+
+        # --- GST Payment: extract GSTIN ref ---
+        if "GST PAYMENT" in desc:
+            return None  # Not a counterparty
+
+        # Fallback: skip — don't return garbage
         return None
 
     def _get_top_counterparties(self, transactions: List[Dict]) -> List[Dict]:

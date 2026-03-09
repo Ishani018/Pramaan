@@ -492,6 +492,17 @@ async def analyze_report(request: Request):
                     news_data = None
                     ecourts_data = None
 
+                # ── Fallback to synthetic mocks when real APIs return empty ──────────
+                if not ecourts_data or ecourts_data.get("cases_found", 0) == 0:
+                    from app.api.v1.external_mocks import mock_ecourts
+                    ecourts_data = await mock_ecourts()
+                    logger.info(f"[{elapsed()}] Using synthetic eCourts fallback")
+
+                if not news_data or not news_data.get("adverse_media_detected"):
+                    from app.api.v1.external_mocks import mock_news
+                    news_data = await mock_news()
+                    logger.info(f"[{elapsed()}] Using synthetic News fallback")
+
                 # ── Step 4.6: MD&A Analysis ───────────────────────────────────────────
                 try:
                     from app.agents.deep_reader.section_boundary_detector import SECTION_CONFIGS
@@ -640,6 +651,7 @@ async def analyze_report(request: Request):
                     applicant_address=applicant_addr,
                     applicant_name=entity_name,
                     applicant_cin=applicant_cin,
+                    bank_transactions=bank_result.transactions,
                 )
                 logger.info(
                     f"[{elapsed()}] CounterpartyIntel done — "
@@ -668,8 +680,50 @@ async def analyze_report(request: Request):
             from app.agents.external.sector_benchmark import BenchmarkResult
             benchmark_result = BenchmarkResult()
 
+        # ── Step 6.9: Claims Extraction + Cross-Verification ──────────────────
+        cross_verification = {"verifications": [], "summary": {}, "triggered_rules": []}
+        claims = {}
+        try:
+            from app.agents.claims_extractor import extract_claims
+            from app.agents.cross_verifier import CrossVerifier
+            from app.api.v1.external_mocks import mock_perfios, mock_karza, mock_cibil
+
+            perfios_for_xver = await mock_perfios()
+            karza_for_xver = await mock_karza()
+            cibil_for_xver = await mock_cibil()
+
+            claims = extract_claims(
+                extracted_figures=latest_scan.get("extracted_figures", {}),
+                scan_dict=latest_scan,
+                shareholding_data=shareholding_data,
+                rating_result=rating_result if 'rating_result' in dir() else None,
+                mda_insights=mda_insights if 'mda_insights' in dir() else None,
+                restatement_data=restatement_data,
+            )
+
+            cross_verifier = CrossVerifier()
+            cross_verification = cross_verifier.verify(
+                claims=claims,
+                bank_result=bank_result,
+                perfios_data=perfios_for_xver,
+                cibil_data=cibil_for_xver,
+                karza_data=karza_for_xver,
+                mca_data=mca_data,
+                ecourts_data=ecourts_data,
+                news_data=news_data,
+                site_visit_result=site_visit_result,
+                benchmark_result=benchmark_result if 'benchmark_result' in dir() else None,
+            )
+            logger.info(
+                f"[{elapsed()}] Cross-verification done — "
+                f"summary={cross_verification.get('summary')}, "
+                f"rules={cross_verification.get('triggered_rules')}"
+            )
+        except Exception as e:
+            logger.exception(f"Cross-verification failed: {e}")
+
         # ── Step 7: Orchestrate Final Decision ───────────────────────────────────
-        
+
         all_triggered_rules = latest_scan.get("triggered_rules", [])
         if site_visit_result and site_visit_result.triggered_rules:
             for rule in site_visit_result.triggered_rules:
@@ -714,6 +768,13 @@ async def analyze_report(request: Request):
                 if rule not in all_triggered_rules:
                     all_triggered_rules.append(rule)
                     
+        # ── Merge Cross-Verification triggered_rules (P-31, P-32) ───────────
+        if cross_verification and cross_verification.get("triggered_rules"):
+            logger.info(f"CrossVerification triggered_rules: {cross_verification['triggered_rules']}")
+            for rule in cross_verification["triggered_rules"]:
+                if rule not in all_triggered_rules:
+                    all_triggered_rules.append(rule)
+
         latest_scan["triggered_rules"] = all_triggered_rules
         logger.info(f"ALL RULES GOING TO ORCHESTRATOR: {all_triggered_rules}")
         
@@ -738,6 +799,7 @@ async def analyze_report(request: Request):
             site_visit_scan={"triggered_rules": site_visit_result.triggered_rules},
             mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None,
             counterparty_intel={"triggered_rules": counterparty_result.triggered_rules} if counterparty_result else None,
+            cross_verification=cross_verification,
         )
         logger.info(f"[{elapsed()}] Orchestrator done")
 
@@ -769,6 +831,8 @@ async def analyze_report(request: Request):
             "entity_name": entity_name,
             "total_caro_matches": len(latest_scan.get("caro_findings", [])),
             "total_qualification_matches": len(latest_scan.get("auditor_qualification_findings", [])),
+            "claims": claims,
+            "cross_verification": cross_verification,
             "decision": decision,
             "all_triggered_rules": decision.get("triggered_rules", []),
             "per_year_scans": per_year_scans,

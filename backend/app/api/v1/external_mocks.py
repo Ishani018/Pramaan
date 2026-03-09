@@ -1,13 +1,17 @@
 """
 Mock External Intelligence APIs
 ================================
-Simulates responses from two third-party bureau APIs used by the Credit Committee.
+Simulates responses from third-party bureau APIs used by the Credit Committee.
 
   GET /api/v1/mock/perfios  – GST reconciliation (Agent A: Capacity / Ghost Input)
-  GET /api/v1/mock/karza    – Litigation history (Agent C: Character / Web Sleuth)
+  GET /api/v1/mock/karza    – Litigation & Director KYB (Agent C: Character / Web Sleuth)
+  GET /api/v1/mock/cibil    – Credit bureau score & facility details
+  GET /api/v1/mock/ecourts  – Court case records (synthetic fallback)
+  GET /api/v1/mock/news     – Adverse media articles (synthetic fallback)
 
 These are deterministic mock fixtures. In production they would call the real APIs
 and return identical JSON schemas so the orchestrator layer never changes.
+All mocks are entity-aware via _last_entity (set by /mock/set-entity).
 """
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -31,87 +35,160 @@ async def set_entity(payload: EntityUpdate):
     return {"status": "success", "entity": _last_entity}
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# PERFIOS — GST Reconciliation
+# ═════════════════════════════════════════════════════════════════════════════
+
 @router.get(
     "/perfios",
     summary="Perfios – GST Reconciliation Mock",
     description=(
         "Simulates a Perfios bureau response for GST-2A vs 3B reconciliation. "
-        "gstr_2a_3b_mismatch_pct > 15 triggers Rule P-01 (Ghost Input Trap). "
-        "circular_trading_flag indicates suspected circular invoicing patterns."
+        "Includes monthly GSTR-3B filings, top suppliers from GSTR-2A, ITC breakdown. "
+        "gstr_2a_3b_mismatch_pct > 15 triggers Rule P-01 (Ghost Input Trap)."
     ),
 )
 async def mock_perfios():
     """
     Fixture: 18.5% mismatch → P-01 triggered (+100 bps / −10% limit).
+    2 delayed filings + 1 not filed in 12 months.
     """
     return {
         "status": "success",
         "provider": "Perfios (mock)",
         "entity": _last_entity["name"],
-        "assessment_period": "FY 2022-23",
+        "assessment_period": "FY 2023-24",
+        "gstin": "27AABCA1234A1Z5",
+        "gst_registration_status": "Active",
+
+        # ── Headline metrics ────────────────────────────────────────────
         "gstr_2a_3b_mismatch_pct": 18.5,      # > 15% → P-01 Ghost Input Trap
         "circular_trading_flag": False,
-        "gst_filing_consistency": "Regular",
+        "gst_filing_consistency": "Irregular",  # 2 delayed + 1 not filed
         "itc_reversal_required": True,
         "itc_reversal_amount_lakh": 12.4,
+        "gst_turnover_cr": 105.2,
+        "annual_gst_liability_lakh": 102.6,
+        "annual_itc_claimed_lakh": 80.2,
+
+        # ── Monthly GSTR-3B filings (12 months) ────────────────────────
+        "gstr_3b_filings": [
+            {"month": "Apr-23", "status": "Filed",     "tax_paid_lakh": 8.2,  "itc_claimed_lakh": 6.1},
+            {"month": "May-23", "status": "Filed",     "tax_paid_lakh": 7.9,  "itc_claimed_lakh": 5.8},
+            {"month": "Jun-23", "status": "Filed",     "tax_paid_lakh": 9.1,  "itc_claimed_lakh": 7.0},
+            {"month": "Jul-23", "status": "Delayed",   "tax_paid_lakh": 6.5,  "itc_claimed_lakh": 5.2},
+            {"month": "Aug-23", "status": "Filed",     "tax_paid_lakh": 8.8,  "itc_claimed_lakh": 6.4},
+            {"month": "Sep-23", "status": "Filed",     "tax_paid_lakh": 10.3, "itc_claimed_lakh": 7.9},
+            {"month": "Oct-23", "status": "Filed",     "tax_paid_lakh": 9.7,  "itc_claimed_lakh": 7.1},
+            {"month": "Nov-23", "status": "Delayed",   "tax_paid_lakh": 5.1,  "itc_claimed_lakh": 4.8},
+            {"month": "Dec-23", "status": "Filed",     "tax_paid_lakh": 11.0, "itc_claimed_lakh": 8.5},
+            {"month": "Jan-24", "status": "Filed",     "tax_paid_lakh": 8.6,  "itc_claimed_lakh": 6.3},
+            {"month": "Feb-24", "status": "Filed",     "tax_paid_lakh": 9.4,  "itc_claimed_lakh": 7.2},
+            {"month": "Mar-24", "status": "Not Filed", "tax_paid_lakh": 0,    "itc_claimed_lakh": 0},
+        ],
+
+        # ── Top suppliers from GSTR-2A ──────────────────────────────────
+        "top_suppliers_gstr2a": [
+            {"name": "Vertex Holdings Pvt Ltd",   "gstin": "27AABCV1234A1Z5", "invoice_value_lakh": 42.3, "itc_lakh": 7.6},
+            {"name": "Nova Trading Corp",         "gstin": "29AADCN5678B1Z2", "invoice_value_lakh": 31.1, "itc_lakh": 5.6},
+            {"name": "Bharat Raw Materials Ltd",  "gstin": "24AABCB9012C1Z8", "invoice_value_lakh": 25.8, "itc_lakh": 4.6},
+            {"name": "Sai Logistics Pvt Ltd",     "gstin": "27AADCS3456D1Z1", "invoice_value_lakh": 18.9, "itc_lakh": 3.4},
+            {"name": "Rajan & Sons Traders",      "gstin": "33AABCR7890E1Z4", "invoice_value_lakh": 12.5, "itc_lakh": 2.3},
+        ],
+
         "metadata": {
-            "data_freshness": "2023-12-31",
+            "data_freshness": "2024-03-31",
             "rule_triggered": "P-01",
             "trigger_condition": "gstr_2a_3b_mismatch_pct > 15",
+            "filing_summary": "9 filed on time, 2 delayed, 1 not filed",
         },
     }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# KARZA — Litigation & Director KYB
+# ═════════════════════════════════════════════════════════════════════════════
+
 @router.get(
     "/karza",
-    summary="Karza – Litigation & Director KYB Mock",
+    summary="Karza – Litigation, Director KYB & Compliance Mock",
     description=(
-        "Simulates a Karza bureau response for litigation history and director KYB. "
-        "active_litigations is a list of pending legal proceedings. "
-        "director_disqualified=true would block approval outright."
+        "Simulates a Karza bureau response for litigation history, director KYB, "
+        "GST registrations, and compliance timeline."
     ),
 )
 async def mock_karza():
     """
     Fixture: One Section 138 cheque bounce case pending — secondary watch flag.
+    3 directors with DINs, 2 GST registrations (1 cancelled), compliance timeline.
     """
     return {
         "status": "success",
         "provider": "Karza (mock)",
         "entity": _last_entity["name"],
         "cin": _last_entity["cin"],
+
+        # ── Litigation ──────────────────────────────────────────────────
         "active_litigations": [
             "Section 138 NI Act – Cheque Bounce – Pending at JMFC Mumbai"
         ],
         "total_litigation_count": 1,
         "director_disqualified": False,
+
+        # ── Charges ─────────────────────────────────────────────────────
         "mca_charge_registered": True,
         "charge_amount_cr": 7.0,
         "charge_holders": ["HDFC Bank Ltd"],
         "epfo_compliance": "Regular",
+
+        # ── Directors ───────────────────────────────────────────────────
+        "directors": [
+            {"name": "Rajesh Kumar Agarwal", "din": "00123456", "designation": "Managing Director",    "appointment_date": "2015-04-01"},
+            {"name": "Sunita Devi Agarwal",  "din": "00789012", "designation": "Whole-Time Director",  "appointment_date": "2015-04-01"},
+            {"name": "Amit Prakash Desai",   "din": "01234567", "designation": "Independent Director", "appointment_date": "2020-08-15"},
+        ],
+
+        # ── GST Registrations ───────────────────────────────────────────
+        "gst_registrations": [
+            {"gstin": "27AABCA1234A1Z5", "state": "Maharashtra", "status": "Active",    "registration_date": "2017-07-01"},
+            {"gstin": "29AABCA1234A1Z8", "state": "Karnataka",   "status": "Cancelled", "cancellation_date": "2023-03-15"},
+        ],
+
+        # ── Compliance Timeline ─────────────────────────────────────────
+        "compliance_timeline": [
+            {"date": "2024-01-10", "event": "Annual Return Filed (FY 2022-23)",   "status": "On Time"},
+            {"date": "2023-09-28", "event": "ROC Filing - Form AOC-4",            "status": "Delayed by 15 days"},
+            {"date": "2023-06-30", "event": "Board Meeting held",                 "status": "Compliant"},
+            {"date": "2023-03-15", "event": "GST Registration Cancelled (Karnataka)", "status": "Voluntary Surrender"},
+            {"date": "2022-11-20", "event": "Charge Registered - HDFC Bank",      "status": "7.0 Cr secured loan"},
+        ],
+        "roc_filing_status": "Up to Date",
+        "annual_return_filed": True,
+
         "metadata": {
             "data_freshness": "2024-01-15",
-            "rule_triggered": None,    # litigation alone doesn't auto-trigger a penalty rule
+            "rule_triggered": None,
             "watch_flag": "Section 138 pending — credit committee manual note required",
         },
     }
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+# NETWORK GRAPH — Circular Trading
+# ═════════════════════════════════════════════════════════════════════════════
 
 @router.get(
     "/network-graph",
     summary="Network Graph – Circular Trading Fraud Mock",
     description=(
         "Simulates a network intelligence response detecting a circular money-laundering loop. "
-        "Returns a node-edge graph showing Acme Steels → Vertex Holdings → Nova Corp → Acme Steels. "
+        "Returns a node-edge graph showing Applicant → Vertex Holdings → Nova Corp → Applicant. "
         "circular_trading_detected=true triggers Rule P-06 (Circular Fraud Detected, −50% limit)."
     ),
 )
 async def mock_network_graph():
     """
     Fixture: Three-entity circular trading loop.
-    Acme Steels (applicant) → Vertex Holdings (shell, ₹5.0 Cr)
-    → Nova Corp (shell, ₹4.8 Cr) → Acme Steels (₹4.5 Cr back).
-    circular_trading_detected=True → P-06 triggered (−50% credit limit).
     """
     return {
         "status": "success",
@@ -119,36 +196,11 @@ async def mock_network_graph():
         "entity": _last_entity["name"],
         "circular_trading_detected": True,
         "nodes": [
-            {
-                "id": "acme",
-                "label": f"{_last_entity['name']}\n(Applicant)",
-                "type": "applicant",
-                "amount_cr": 5.0,
-            },
-            {
-                "id": "vertex",
-                "label": "Vertex Holdings\n(Shell)",
-                "type": "shell",
-                "amount_cr": 4.8,
-            },
-            {
-                "id": "nova",
-                "label": "Nova Corp\n(Shell)",
-                "type": "shell",
-                "amount_cr": 4.5,
-            },
-            {
-                "id": "dir1",
-                "label": "Rahul Sharma\n(Director)",
-                "type": "director",
-                "amount_cr": 0,
-            },
-            {
-                "id": "dir2",
-                "label": "Amit Desai\n(Director)",
-                "type": "director",
-                "amount_cr": 0,
-            },
+            {"id": "acme",   "label": f"{_last_entity['name']}\n(Applicant)", "type": "applicant", "amount_cr": 5.0},
+            {"id": "vertex", "label": "Vertex Holdings\n(Shell)",              "type": "shell",     "amount_cr": 4.8},
+            {"id": "nova",   "label": "Nova Corp\n(Shell)",                    "type": "shell",     "amount_cr": 4.5},
+            {"id": "dir1",   "label": "Rahul Sharma\n(Director)",              "type": "director",  "amount_cr": 0},
+            {"id": "dir2",   "label": "Amit Desai\n(Director)",                "type": "director",  "amount_cr": 0},
         ],
         "links": [
             {"source": "acme",   "target": "vertex", "value": 5.0, "label": "₹5.0 Cr"},
@@ -167,37 +219,199 @@ async def mock_network_graph():
     }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# CIBIL — Credit Bureau Score & Facilities
+# ═════════════════════════════════════════════════════════════════════════════
+
 @router.get(
     "/cibil",
     summary="CIBIL Commercial – Credit Bureau Score Mock",
     description=(
         "Simulates a CIBIL Commercial credit bureau response. "
-        "Returns a credit score, rating, DPD history, and outstanding facilities."
+        "Returns credit score, rating, DPD history, facility-level details, and outstanding."
     ),
 )
 async def mock_cibil():
     """
-    Fixture: Moderate credit score with minor DPD history.
+    Fixture: Moderate credit score (72) with minor DPD history.
+    SBI Cash Credit in SMA-1 (30 DPD). Suit filed 3.5 Cr.
     """
     return {
         "status": "success",
         "provider": "CIBIL Commercial (mock)",
         "entity": _last_entity["name"],
         "cin": _last_entity["cin"],
+
+        # ── Score & Rating ──────────────────────────────────────────────
         "credit_score": 72,
         "rating": "BB+",
         "score_range": "1–100",
+
+        # ── DPD History ─────────────────────────────────────────────────
         "dpd_30_count": 2,
         "dpd_60_count": 0,
         "dpd_90_count": 0,
         "suit_filed_amount_cr": 3.5,
+
+        # ── Portfolio Summary ───────────────────────────────────────────
         "total_credit_facilities": 4,
         "total_outstanding_cr": 12.8,
         "overdue_amount_cr": 0.8,
         "oldest_account_age_years": 8,
+        "enquiry_count_6m": 5,
+        "written_off_amount_cr": 0,
+
+        # ── Facility-Level Detail ───────────────────────────────────────
+        "facilities": [
+            {"type": "Term Loan",        "lender": "HDFC Bank",  "sanctioned_cr": 7.0, "outstanding_cr": 6.2, "dpd_current": 0,  "status": "Standard"},
+            {"type": "Cash Credit",      "lender": "SBI",        "sanctioned_cr": 3.0, "outstanding_cr": 2.8, "dpd_current": 30, "status": "SMA-1"},
+            {"type": "Working Capital",  "lender": "ICICI Bank", "sanctioned_cr": 2.5, "outstanding_cr": 2.1, "dpd_current": 0,  "status": "Standard"},
+            {"type": "Letter of Credit", "lender": "Axis Bank",  "sanctioned_cr": 1.5, "outstanding_cr": 1.7, "dpd_current": 0,  "status": "Standard"},
+        ],
+
         "metadata": {
             "data_freshness": "2024-01-20",
             "bureau": "TransUnion CIBIL",
             "report_type": "Commercial Credit Report (CCR)",
         },
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# eCOURTS — Synthetic Court Cases (fallback when real API unreachable)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/ecourts",
+    summary="eCourts – Synthetic Court Case Records",
+    description=(
+        "Synthetic fallback for eCourts data when the real API is unreachable. "
+        "Returns 3 cases: 1 NCLT insolvency petition (CRITICAL), 1 civil recovery, 1 cheque bounce."
+    ),
+)
+async def mock_ecourts():
+    """
+    Fixture: 3 cases, 1 high-risk NCLT Section 7 IBC.
+    Triggers P-15 (Active Court Proceedings).
+    """
+    return {
+        "status": "success",
+        "provider": "eCourts (mock)",
+        "entity": _last_entity["name"],
+        "cases_found": 3,
+        "high_risk_cases": 1,
+        "cases": [
+            {
+                "case_number": "CS/2023/04521",
+                "court": "City Civil Court, Mumbai",
+                "case_type": "Civil Suit",
+                "filing_date": "2023-06-15",
+                "parties": f"{_last_entity['name']} vs Vertex Holdings Pvt Ltd",
+                "status": "Pending",
+                "next_hearing": "2024-03-20",
+                "subject": "Recovery of trade dues",
+                "amount_cr": 2.3,
+            },
+            {
+                "case_number": "CP/2023/00187",
+                "court": "NCLT Mumbai Bench",
+                "case_type": "Company Petition",
+                "filing_date": "2023-09-01",
+                "parties": f"HDFC Bank vs {_last_entity['name']}",
+                "status": "Admitted",
+                "next_hearing": "2024-04-12",
+                "subject": "Application under Section 7 IBC — default on term loan",
+                "amount_cr": 7.0,
+            },
+            {
+                "case_number": "CC/2022/03891",
+                "court": "JMFC Mumbai",
+                "case_type": "Criminal Complaint",
+                "filing_date": "2022-11-10",
+                "parties": f"M/s Sai Logistics vs {_last_entity['name']}",
+                "status": "Pending",
+                "next_hearing": "2024-02-28",
+                "subject": "Section 138 NI Act — Cheque Dishonour",
+                "amount_cr": 0.45,
+            },
+        ],
+        "findings": [
+            {
+                "signal": "NCLT Section 7 IBC application admitted — insolvency proceeding initiated by secured creditor",
+                "court": "NCLT Mumbai Bench",
+                "filing_date": "2023-09-01",
+                "severity": "CRITICAL",
+            },
+        ],
+        "triggered_rules": ["P-15"],
+        "source": "eCourts (mock)",
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# NEWS — Synthetic Adverse Media (fallback when NewsAPI key missing)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/news",
+    summary="News – Synthetic Adverse Media Articles",
+    description=(
+        "Synthetic fallback for news data when NewsAPI key is not configured. "
+        "Returns 3 articles: 1 CRITICAL (NCLT), 1 HIGH (ED probe), 1 neutral."
+    ),
+)
+async def mock_news():
+    """
+    Fixture: 2 red-flag articles + 1 neutral.
+    Triggers P-13 (Adverse Media Detected).
+    """
+    return {
+        "status": "success",
+        "provider": "NewsAPI (mock)",
+        "entity": _last_entity["name"],
+        "articles_found": 3,
+        "red_flag_count": 2,
+        "articles": [
+            {
+                "headline": f"NCLT admits insolvency plea against {_last_entity['name']} over \u20b97 Cr loan default",
+                "source": "Economic Times",
+                "published": "2023-10-15",
+                "url": "#",
+                "severity": "CRITICAL",
+                "summary": "HDFC Bank filed petition under Section 7 of IBC after company defaulted on term loan repayment.",
+            },
+            {
+                "headline": f"ED probes shell company links in {_last_entity['name']} supply chain",
+                "source": "Mint",
+                "published": "2023-12-02",
+                "url": "#",
+                "severity": "HIGH",
+                "summary": "Enforcement Directorate examining circular transactions between applicant and two shell entities.",
+            },
+            {
+                "headline": f"{_last_entity['name']} reports 12% revenue growth in Q3 FY24",
+                "source": "Business Standard",
+                "published": "2024-01-20",
+                "url": "#",
+                "severity": "NONE",
+                "summary": "Company reported improved quarterly performance driven by domestic demand.",
+            },
+        ],
+        "red_flags": [
+            {
+                "headline": f"NCLT admits insolvency plea against {_last_entity['name']} over \u20b97 Cr loan default",
+                "source": "Economic Times",
+                "severity": "CRITICAL",
+                "summary": "HDFC Bank filed petition under Section 7 of IBC after company defaulted on term loan repayment.",
+            },
+            {
+                "headline": f"ED probes shell company links in {_last_entity['name']} supply chain",
+                "source": "Mint",
+                "severity": "HIGH",
+                "summary": "Enforcement Directorate examining circular transactions between applicant and two shell entities.",
+            },
+        ],
+        "adverse_media_detected": True,
+        "triggered_rules": ["P-13"],
+        "source": "NewsAPI (mock)",
     }

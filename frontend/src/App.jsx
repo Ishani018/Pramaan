@@ -13,7 +13,7 @@ import axios from 'axios'
 import {
     Brain, Shield, ChevronRight, AlertCircle, Download,
     BarChart2, Map, ShieldAlert, Terminal, Cpu, TrendingDown, TrendingUp,
-    FileText, Building2, Landmark, Network, ListTree, ChevronDown, Eye
+    FileText, Building2, Landmark, Network, ListTree, ChevronDown, Eye, ShieldCheck
 } from 'lucide-react'
 import PDFViewer from './components/PDFViewer'
 import WaterfallChart from './components/WaterfallChart'
@@ -25,6 +25,7 @@ import RestatementAnalysis from './components/RestatementAnalysis'
 import TrendPanel from './components/TrendPanel'
 import BankStatementPanel from './components/BankStatementPanel'
 import SectorBenchmarkPanel from './components/SectorBenchmarkPanel'
+import CrossVerificationPanel from './components/CrossVerificationPanel'
 
 export const RULE_DISPLAY_NAMES = {
     "P-01": "GST-01: Revenue Mismatch",
@@ -42,7 +43,9 @@ export const RULE_DISPLAY_NAMES = {
     "P-15": "LEGAL-01: Active Court Proceedings",
     "P-16": "MGMT-01: Negative Management Sentiment",
     "P-17": "SHARE-01: High Promoter Pledge",
-    "P-18": "SHARE-02: Low Promoter Holding"
+    "P-18": "SHARE-02: Low Promoter Holding",
+    "P-31": "XVER-01: Revenue Verification Mismatch",
+    "P-32": "XVER-02: Compliance Claim Contradicted"
 }
 
 // ── Client-side penalty orchestrator (mirrors backend logic) ─────────────────
@@ -76,6 +79,14 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
         if (shareholding.triggered_rules.includes('P-18') && !triggered.includes('P-18')) triggered.push('P-18');
     }
 
+    // ── P-31 & P-32: Cross-Verification Mismatches ────────────────────────
+    const xver = pdfScan?.cross_verification;
+    if (xver && xver.triggered_rules) {
+        for (const rule of xver.triggered_rules) {
+            if (!triggered.includes(rule)) triggered.push(rule);
+        }
+    }
+
     const RULES = {
         'P-01': { name: RULE_DISPLAY_NAMES['P-01'], bps: 100, cut: 10, manual: false, trigger: 'GSTR-2A vs 3B mismatch > 15% (Perfios)' },
         'P-03': { name: RULE_DISPLAY_NAMES['P-03'], bps: 150, cut: 20, manual: false, trigger: 'CARO 2020 Clause (vii) / auditor qualification' },
@@ -88,6 +99,8 @@ function orchestrateDecision(pdfScan, perfios, networkData, restatementData) {
         'P-16': { name: RULE_DISPLAY_NAMES['P-16'], bps: 50, cut: 5, manual: false, trigger: 'MD&A sentiment score negative per Loughran-McDonald lexicon' },
         'P-17': { name: RULE_DISPLAY_NAMES['P-17'], bps: 75, cut: 10, manual: true, trigger: 'Promoter shares pledged > 50% — distress signal, forced selling risk' },
         'P-18': { name: RULE_DISPLAY_NAMES['P-18'], bps: 50, cut: 5, manual: false, trigger: 'Promoter holding below 26% — low skin in the game' },
+        'P-31': { name: RULE_DISPLAY_NAMES['P-31'], bps: 100, cut: 15, manual: true, trigger: 'Cross-verification: claimed revenue not supported by bank deposits or GST data' },
+        'P-32': { name: RULE_DISPLAY_NAMES['P-32'], bps: 75, cut: 10, manual: true, trigger: 'Cross-verification: annual report claims contradicted by external bureau data' },
     }
 
     let rate = BASE_RATE
@@ -120,24 +133,20 @@ const PROGRESS_STEPS = [
     { pct: 50, msg: "EXTRACTING FINANCIALS...", sub: "Revenue, EBITDA, Net Worth, Debt" },
     { pct: 65, msg: "QUERYING MCA21...", sub: "Live company registry lookup" },
     { pct: 75, msg: "SCANNING ADVERSE MEDIA...", sub: "NewsAPI live search running" },
-    { pct: 85, msg: "RUNNING RESTATEMENT CHECK...", sub: "Multi-year comparison" },
-    { pct: 92, msg: "COMPUTING PENALTIES...", sub: "Rate waterfall accumulator" },
+    { pct: 82, msg: "RUNNING RESTATEMENT CHECK...", sub: "Multi-year comparison" },
+    { pct: 89, msg: "CROSS-VERIFYING CLAIMS...", sub: "Annual report vs external evidence" },
+    { pct: 94, msg: "COMPUTING PENALTIES...", sub: "Rate waterfall accumulator" },
     { pct: 97, msg: "GENERATING CAM...", sub: "Credit Appraisal Memo assembly" },
     { pct: 100, msg: "ANALYSIS COMPLETE", sub: "Switching to results..." }
 ]
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
-    { id: 'compliance', label: 'Compliance', icon: ShieldAlert },
-    { id: 'waterfall', label: 'Waterfall', icon: BarChart2 },
-    { id: 'heatmap', label: 'Evidence', icon: Map },
-    { id: 'network', label: 'Network', icon: Network },
-    { id: 'bank-statement', label: 'Bank', icon: Landmark },
-    { id: 'benchmark', label: 'Benchmark', icon: BarChart2 },
-    { id: 'adverse-media', label: 'Media & Legal', icon: ShieldAlert },
-    { id: 'restatement', label: 'Restatement', icon: TrendingDown },
-    { id: 'trends', label: 'Trends', icon: TrendingUp },
-    { id: 'sentiment', label: 'Sentiment', icon: Eye },
+    { id: 'decision',     label: 'Decision',     icon: BarChart2 },
+    { id: 'compliance',   label: 'Compliance',   icon: ShieldAlert },
+    { id: 'cross-verify', label: 'Verify',       icon: ShieldCheck },
+    { id: 'intelligence', label: 'Intelligence', icon: Network },
+    { id: 'financials',   label: 'Financials',   icon: TrendingUp },
 ]
 
 const ALL_RULES = [
@@ -153,6 +162,8 @@ const ALL_RULES = [
     { id: 'P-16', label: RULE_DISPLAY_NAMES['P-16'] },
     { id: 'P-17', label: RULE_DISPLAY_NAMES['P-17'], severity: 'HIGH' },
     { id: 'P-18', label: RULE_DISPLAY_NAMES['P-18'] },
+    { id: 'P-31', label: RULE_DISPLAY_NAMES['P-31'], severity: 'HIGH' },
+    { id: 'P-32', label: RULE_DISPLAY_NAMES['P-32'], severity: 'HIGH' },
 ]
 
 function StatusBadge({ status, message }) {
@@ -236,7 +247,7 @@ export default function App() {
     const [loading, setLoading] = useState(false)
     const [camLoading, setCamLoading] = useState(false)
     const [error, setError] = useState(null)
-    const [activeTab, setActiveTab] = useState('compliance')
+    const [activeTab, setActiveTab] = useState('decision')
     const [bureauLoading, setBureauLoading] = useState(false)
     const [progressStepIdx, setProgressStepIdx] = useState(0)
 
@@ -840,14 +851,11 @@ export default function App() {
                             )}
                             {/* Tab content */}
                             <div className="flex-1 overflow-y-auto p-5">
-                                {activeTab === 'compliance' && (
-                                    <CompliancePanel result={pdfResult} loading={loading} />
-                                )}
-                                {activeTab === 'waterfall' && (
+                                {/* ── TAB 1: DECISION ──────────────────────────────── */}
+                                {activeTab === 'decision' && (
                                     <div className="flex flex-col gap-6 h-full pb-10">
                                         <WaterfallChart decision={decision} triggeredRules={triggeredRules} />
 
-                                        {/* Decision Audit Trail Collapsible */}
                                         {auditTrail && (
                                             <details className="group border-2 border-border bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden mt-6">
                                                 <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
@@ -882,140 +890,233 @@ export default function App() {
                                         )}
                                     </div>
                                 )}
-                                {activeTab === 'heatmap' && (
-                                    <ComplianceHeatmap result={pdfResult} />
-                                )}
-                                {activeTab === 'network' && (
-                                    <NetworkAnalysis data={networkData} />
-                                )}
-                                {activeTab === 'bank-statement' && (
-                                    <BankStatementPanel bankData={pdfResult?.bank_statement} />
-                                )}
-                                {activeTab === 'benchmark' && (
-                                    <SectorBenchmarkPanel benchmarkData={pdfResult?.benchmark_data} />
-                                )}
-                                {activeTab === 'adverse-media' && (
+
+                                {/* ── TAB 2: COMPLIANCE ─────────────────────────────── */}
+                                {activeTab === 'compliance' && (
                                     <div className="flex flex-col gap-6">
-                                        <AdverseMediaPanel newsData={pdfResult?.news} />
+                                        <CompliancePanel result={pdfResult} loading={loading} />
 
-                                        {/* eCourts Litigation Scan */}
-                                        <div className="border-[3px] border-ink bg-paper p-6 relative">
-                                            <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
-                                                <div className="w-2 h-2 bg-ink" />
-                                                ECOURTS — LITIGATION SCAN
+                                        <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Evidence Heatmap
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                <ComplianceHeatmap result={pdfResult} />
                                             </div>
-
-                                            {(() => {
-                                                const ec = pdfResult?.ecourts;
-                                                if (!ec || ec.cases_found === 0) {
-                                                    return (
-                                                        <div className="mt-2 text-sm font-mono text-muted">No cases found via eCourts public API.</div>
-                                                    );
-                                                }
-                                                return (
-                                                    <div className="mt-2 flex flex-col gap-4">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="border-2 border-border p-3">
-                                                                <div className="text-xs font-mono font-bold text-muted uppercase">CASES FOUND</div>
-                                                                <div className="text-2xl font-mono font-bold text-ink">{ec.cases_found}</div>
-                                                            </div>
-                                                            <div className="border-2 border-border p-3">
-                                                                <div className="text-xs font-mono font-bold text-muted uppercase">HIGH-RISK</div>
-                                                                <div className={`text-2xl font-mono font-bold ${ec.high_risk_cases > 0 ? 'text-red' : 'text-green'}`}>{ec.high_risk_cases}</div>
-                                                            </div>
-                                                            {ec.triggered_rules?.includes('P-15') && (
-                                                                <div className="px-3 py-1 border-[3px] border-red text-red font-mono font-bold uppercase text-xs transform -rotate-1">
-                                                                    P-15 TRIGGERED — LEGAL-01
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {(ec?.findings || []).length > 0 && (
-                                                            <div className="flex flex-col gap-3">
-                                                                {(ec?.findings || []).map((f, idx) => (
-                                                                    <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
-                                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
-                                                                        <div className="font-mono text-xs font-bold text-red uppercase mb-1">[{f?.severity || "INFO"}]</div>
-                                                                        <p className="font-serif text-ink text-sm leading-relaxed">{f?.signal || "Finding signal missing"}</p>
-                                                                        <p className="font-mono text-xs text-muted mt-1">Court: {f?.court || 'N/A'} | Filed: {f?.filing_date || 'N/A'}</p>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-
-                                            <div className="mt-4 text-[10px] font-mono text-muted uppercase tracking-widest border-t border-border pt-2">
-                                                eCourts Public API [LIVE]
-                                            </div>
-                                        </div>
+                                        </details>
                                     </div>
                                 )}
-                                {activeTab === 'restatement' && (
-                                    <RestatementAnalysis
-                                        restatementData={pdfResult?.restatement_data}
-                                        pdfResult={pdfResult}
-                                    />
-                                )}
-                                {activeTab === 'trends' && (
-                                    <TrendPanel perYearScans={pdfResult?.per_year_scans} />
-                                )}
-                                {activeTab === 'sentiment' && pdfResult?.mda_insights?.status === "success" && (
-                                    <div className="flex flex-col gap-6">
-                                        <div className="border-[3px] border-ink bg-paper p-6 relative">
-                                            <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
-                                                <div className="w-2 h-2 bg-ink" />
-                                                MD&A SENTIMENT ANALYSIS
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-6 mt-2">
-                                                <div className="border-2 border-border p-4">
-                                                    <div className="text-xs font-mono font-bold text-muted uppercase mb-1">SENTIMENT SCORE</div>
-                                                    <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.sentiment_score < -0.01 ? 'text-red' :
-                                                        pdfResult.mda_insights.sentiment_score > 0.01 ? 'text-green' : 'text-[#D4A017]'
-                                                        }`}>
-                                                        {pdfResult.mda_insights.sentiment_score}
-                                                    </div>
-                                                </div>
-                                                <div className="border-2 border-border p-4">
-                                                    <div className="text-xs font-mono font-bold text-muted uppercase mb-1">RISK INTENSITY</div>
-                                                    <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.risk_intensity > 0.04 ? 'text-red' :
-                                                        pdfResult.mda_insights.risk_intensity >= 0.02 ? 'text-[#D4A017]' : 'text-green'
-                                                        }`}>
-                                                        {pdfResult.mda_insights.risk_intensity}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
 
-                                        <div className="border-[3px] border-border bg-[#F8F9FA] p-6">
-                                            <h3 className="font-display font-bold text-ink uppercase tracking-wide text-sm mb-4">KEY RISK SENTENCES DETECTED</h3>
-                                            <div className="flex flex-col gap-3">
-                                                {pdfResult.mda_insights.extracted_headwinds && pdfResult.mda_insights.extracted_headwinds.length > 0 ? (
-                                                    pdfResult.mda_insights.extracted_headwinds.map((sentence, idx) => (
-                                                        <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
-                                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
-                                                            <p className="font-serif text-ink text-sm leading-relaxed">{sentence}</p>
+                                {/* ── TAB 3: VERIFY ───────────────────────────────── */}
+                                {activeTab === 'cross-verify' && (
+                                    <CrossVerificationPanel data={pdfResult?.cross_verification} claims={pdfResult?.claims} />
+                                )}
+
+                                {/* ── TAB 4: INTELLIGENCE ─────────────────────────── */}
+                                {activeTab === 'intelligence' && (
+                                    <div className="flex flex-col gap-4">
+                                        <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Network Analysis
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                <NetworkAnalysis data={networkData} />
+                                            </div>
+                                        </details>
+
+                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Bank Statement
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                <BankStatementPanel bankData={pdfResult?.bank_statement} />
+                                            </div>
+                                        </details>
+
+                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Media & Legal
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5 flex flex-col gap-6">
+                                                <AdverseMediaPanel newsData={pdfResult?.news} />
+
+                                                {/* eCourts Litigation Scan */}
+                                                <div className="border-[3px] border-ink bg-paper p-6 relative">
+                                                    <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
+                                                        <div className="w-2 h-2 bg-ink" />
+                                                        ECOURTS — LITIGATION SCAN
+                                                    </div>
+
+                                                    {(() => {
+                                                        const ec = pdfResult?.ecourts;
+                                                        if (!ec || ec.cases_found === 0) {
+                                                            return (
+                                                                <div className="mt-2 text-sm font-mono text-muted">No cases found via eCourts public API.</div>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <div className="mt-2 flex flex-col gap-4">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="border-2 border-border p-3">
+                                                                        <div className="text-xs font-mono font-bold text-muted uppercase">CASES FOUND</div>
+                                                                        <div className="text-2xl font-mono font-bold text-ink">{ec.cases_found}</div>
+                                                                    </div>
+                                                                    <div className="border-2 border-border p-3">
+                                                                        <div className="text-xs font-mono font-bold text-muted uppercase">HIGH-RISK</div>
+                                                                        <div className={`text-2xl font-mono font-bold ${ec.high_risk_cases > 0 ? 'text-red' : 'text-green'}`}>{ec.high_risk_cases}</div>
+                                                                    </div>
+                                                                    {ec.triggered_rules?.includes('P-15') && (
+                                                                        <div className="px-3 py-1 border-[3px] border-red text-red font-mono font-bold uppercase text-xs transform -rotate-1">
+                                                                            P-15 TRIGGERED — LEGAL-01
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {(ec?.findings || []).length > 0 && (
+                                                                    <div className="flex flex-col gap-3">
+                                                                        {(ec?.findings || []).map((f, idx) => (
+                                                                            <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
+                                                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
+                                                                                <div className="font-mono text-xs font-bold text-red uppercase mb-1">[{f?.severity || "INFO"}]</div>
+                                                                                <p className="font-serif text-ink text-sm leading-relaxed">{f?.signal || "Finding signal missing"}</p>
+                                                                                <p className="font-mono text-xs text-muted mt-1">Court: {f?.court || 'N/A'} | Filed: {f?.filing_date || 'N/A'}</p>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
+
+                                                    <div className="mt-4 text-[10px] font-mono text-muted uppercase tracking-widest border-t border-border pt-2">
+                                                        eCourts Public API [LIVE]
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
+                                )}
+
+                                {/* ── TAB 5: FINANCIALS ─────────────────────────────── */}
+                                {activeTab === 'financials' && (
+                                    <div className="flex flex-col gap-4">
+                                        <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Sector Benchmark
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                <SectorBenchmarkPanel benchmarkData={pdfResult?.benchmark_data} />
+                                            </div>
+                                        </details>
+
+                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Restatement Analysis
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                <RestatementAnalysis
+                                                    restatementData={pdfResult?.restatement_data}
+                                                    pdfResult={pdfResult}
+                                                />
+                                            </div>
+                                        </details>
+
+                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Multi-Year Trends
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                <TrendPanel perYearScans={pdfResult?.per_year_scans} />
+                                            </div>
+                                        </details>
+
+                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    MD&A Sentiment
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                {pdfResult?.mda_insights?.status === "success" ? (
+                                                    <div className="flex flex-col gap-6">
+                                                        <div className="grid grid-cols-2 gap-6">
+                                                            <div className="border-2 border-border p-4">
+                                                                <div className="text-xs font-mono font-bold text-muted uppercase mb-1">SENTIMENT SCORE</div>
+                                                                <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.sentiment_score < -0.01 ? 'text-red' :
+                                                                    pdfResult.mda_insights.sentiment_score > 0.01 ? 'text-green' : 'text-[#D4A017]'
+                                                                    }`}>
+                                                                    {pdfResult.mda_insights.sentiment_score}
+                                                                </div>
+                                                            </div>
+                                                            <div className="border-2 border-border p-4">
+                                                                <div className="text-xs font-mono font-bold text-muted uppercase mb-1">RISK INTENSITY</div>
+                                                                <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.risk_intensity > 0.04 ? 'text-red' :
+                                                                    pdfResult.mda_insights.risk_intensity >= 0.02 ? 'text-[#D4A017]' : 'text-green'
+                                                                    }`}>
+                                                                    {pdfResult.mda_insights.risk_intensity}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    ))
+
+                                                        <div className="border-[3px] border-border bg-[#F8F9FA] p-6">
+                                                            <h3 className="font-display font-bold text-ink uppercase tracking-wide text-sm mb-4">KEY RISK SENTENCES DETECTED</h3>
+                                                            <div className="flex flex-col gap-3">
+                                                                {pdfResult.mda_insights.extracted_headwinds && pdfResult.mda_insights.extracted_headwinds.length > 0 ? (
+                                                                    pdfResult.mda_insights.extracted_headwinds.map((sentence, idx) => (
+                                                                        <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
+                                                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
+                                                                            <p className="font-serif text-ink text-sm leading-relaxed">{sentence}</p>
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    <div className="text-sm font-mono text-muted">No material headwinds detected.</div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="text-[10px] font-mono text-muted uppercase tracking-widest text-center border-t border-border pt-4">
+                                                            METHODOLOGY: LOUGHRAN-McDONALD FINANCIAL SENTIMENT DICTIONARY — ZERO LLM CALLS
+                                                        </div>
+                                                    </div>
                                                 ) : (
-                                                    <div className="text-sm font-mono text-muted">No material headwinds detected.</div>
+                                                    <div className="flex flex-col items-center justify-center py-12">
+                                                        <Eye size={24} className="text-muted mb-3" />
+                                                        <h3 className="font-display font-bold text-ink uppercase tracking-wide text-sm">MD&A Not Found</h3>
+                                                        <p className="text-sm font-serif text-muted mt-2 text-center max-w-md">The Management Discussion & Analysis section could not be located or contained insufficient text for evaluation.</p>
+                                                    </div>
                                                 )}
                                             </div>
-                                        </div>
-
-                                        <div className="mt-4 text-[10px] font-mono text-muted uppercase tracking-widest text-center border-t border-border pt-4">
-                                            METHODOLOGY: LOUGHRAN-McDONALD FINANCIAL SENTIMENT DICTIONARY — ZERO LLM CALLS
-                                        </div>
-                                    </div>
-                                )}
-                                {activeTab === 'sentiment' && pdfResult?.mda_insights?.status !== "success" && (
-                                    <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-border bg-paper/50">
-                                        <div className="w-12 h-12 flex items-center justify-center bg-white border-2 border-border mb-4">
-                                            <Eye size={24} className="text-muted" />
-                                        </div>
-                                        <h3 className="font-display font-bold text-ink uppercase tracking-wide">MD&A Not Found</h3>
-                                        <p className="text-sm font-serif text-muted mt-2 text-center max-w-md">The Management Discussion & Analysis section could not be located or contained insufficient text for evaluation.</p>
+                                        </details>
                                     </div>
                                 )}
                             </div>

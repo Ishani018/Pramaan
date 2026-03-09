@@ -408,34 +408,25 @@ class CounterpartyIntel:
 
     def _clean_party_name(self, raw_name: str) -> str:
         """
-        Clean bank statement counterparty name into something searchable on MCA.
-        Bank statements have formats like 'ACME STEELS PVT LTD' or 'NEFT/HDFC/ACME STEEL'
+        Clean already-extracted counterparty name for MCA search.
+        The party name comes from BankStatementAnalyzer._extract_party() which
+        already strips bank prefixes (NEFT/RTGS/IMPS) and ref numbers.
+        This method just normalizes for MCA API compatibility.
         """
         name = raw_name.upper().strip()
-        # Remove common bank transfer prefixes
-        for prefix in ["NEFT", "RTGS", "IMPS", "UPI", "TRF", "BY CLG", "TO CLG"]:
-            name = name.replace(prefix, "")
-        # Remove slashes and clean up
-        name = re.sub(r'[/\\]', ' ', name)
-        # Remove account numbers and reference numbers
-        name = re.sub(r'\b\d{6,}\b', '', name)
-        # Remove common noise words from bank descriptions
-        for noise in ["TRANSFER", "PAYMENT", "CREDIT", "DEBIT", "A/C", "AC "]:
-            name = name.replace(noise, "")
+
+        # Strip trailing punctuation that _extract_party might leave
+        name = name.strip("-").strip("/").strip()
+
+        # Remove double dashes left by suffix cleaning
+        name = name.replace("--", " ")
+
+        # Normalize whitespace
         name = re.sub(r'\s+', ' ', name).strip()
 
-        # Must have at least 3 chars left and look like a company name
         if len(name) < 3:
             return ""
 
-        # Check if it looks like a company (has PVT/LTD/LLC/CORP etc.)
-        company_indicators = ["PVT", "LTD", "LIMITED", "CORP", "INC", "LLC", "INDUSTRIES",
-                              "ENTERPRISES", "TRADING", "EXPORTS", "IMPORTS", "STEEL",
-                              "TEXTILES", "PHARMA", "CHEMICALS", "INFRA", "TECH"]
-        has_company_indicator = any(ind in name for ind in company_indicators)
-
-        # If no indicator, it might be a person or generic — still return it
-        # but the MCA lookup will likely not find it
         return name
 
     def _normalize_name(self, name: str) -> str:
