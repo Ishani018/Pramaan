@@ -854,7 +854,7 @@ export default function App() {
                                 {/* ── TAB 1: DECISION ──────────────────────────────── */}
                                 {activeTab === 'decision' && (
                                     <div className="flex flex-col gap-6 h-full pb-10">
-                                        <WaterfallChart decision={decision} triggeredRules={triggeredRules} />
+                                        <WaterfallChart decision={decision} />
 
                                         {auditTrail && (
                                             <details className="group border-2 border-border bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden mt-6">

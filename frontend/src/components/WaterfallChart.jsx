@@ -1,238 +1,205 @@
 /**
- * WaterfallChart – Live Rule Engine Penalty Visualisation
- * ========================================================
- * Props:
- *   decision  – the `decision` object from the API response (optional, uses mock if null)
- *   triggered – the `triggered_rules` array from the API response
- *
- * The waterfall is computed dynamically from whatever the backend returns.
- * When the API returns caro_default_found=true or adverse_opinion_found=true,
- * P-03 appears as a triggered penalty bar.
+ * DecisionPanel – Verdict + Penalty Breakdown
+ * =============================================
+ * Replaces the old Recharts waterfall with a clear, readable decision summary.
+ * Shows: verdict banner → rate/limit impact → penalty table with human descriptions.
  */
-import { ComposedChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { AlertTriangle, CheckCircle, Info } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ShieldAlert, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react'
 
 const BASE_RATE = 9.0
 const BASE_LIMIT = 10.0
 
-const RULE_META = {
-    'P-01': { label: 'P-01 Ghost Input', color: '#EF4444', desc: 'GSTR-2A vs 3B mismatch > 15%' },
-    'P-02': { label: 'P-02 Hidden Family', color: '#F97316', desc: 'RPT outflows to family-owned director firms' },
-    'P-03': { label: 'P-03 Stat. Default', color: '#DC2626', desc: 'CARO 2020 Clause (vii) / Auditor qualification' },
-    'P-04': { label: 'P-04 Power Mismatch', color: '#F59E0B', desc: 'Factory capacity vs power expenses – manual review' },
-    'P-06': { label: 'P-06 Circular Fraud Detected', color: '#7C3AED', desc: 'Circular trading loop detected via network graph' },
+const VERDICT_CONFIG = {
+    APPROVE: {
+        label: 'APPROVED',
+        sublabel: 'No risk signals detected',
+        color: 'text-green',
+        bg: 'bg-green/10',
+        border: 'border-green',
+        icon: CheckCircle,
+    },
+    CONDITIONAL_APPROVAL: {
+        label: 'CONDITIONAL',
+        sublabel: 'Conditions must be met before disbursement',
+        color: 'text-yellow',
+        bg: 'bg-yellow/5',
+        border: 'border-yellow',
+        icon: AlertTriangle,
+    },
+    MANUAL_REVIEW: {
+        label: 'MANUAL REVIEW',
+        sublabel: 'Requires credit committee escalation',
+        color: 'text-red',
+        bg: 'bg-red/5',
+        border: 'border-red',
+        icon: ShieldAlert,
+    },
 }
 
-const WATERFALL_LABELS = {
-    "Base Rate": "Base Rate",
-    "P-01": "GST-01",
-    "P-02": "KYC-01",
-    "P-03": "AUDIT-01",
-    "P-04": "AUDIT-02",
-    "P-06": "FRAUD-01",
-    "P-07": "PRIMARY-01",
-    "P-08": "BANK-01",
-    "P-09": "RESTATE-01",
-    "P-10": "AUDIT-03",
-    "P-11": "RATING-01",
-    "P-12": "RATING-02",
-    "P-13": "MEDIA-01",
-    "P-14": "CORP-01",
-    "Final Rate": "Final Rate"
-}
+function RateBar({ base, final, label }) {
+    const max = Math.max(final, base) * 1.2
+    const basePct = (base / max) * 100
+    const finalPct = (final / max) * 100
+    const increased = final > base
 
-const MOCK_DECISION = {
-    base_rate_pct: BASE_RATE,
-    final_rate_pct: BASE_RATE,
-    base_limit_cr: BASE_LIMIT,
-    final_limit_cr: BASE_LIMIT,
-    recommendation: 'APPROVE',
-    applied_penalties: [],
-}
-
-const RECOMMENDATION_STYLES = {
-    APPROVE: { color: 'text-success', bg: 'bg-success/10', border: 'border-success/20', icon: CheckCircle },
-    CONDITIONAL_APPROVAL: { color: 'text-warn', bg: 'bg-warn/10', border: 'border-warn/20', icon: AlertTriangle },
-    MANUAL_REVIEW: { color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/20', icon: AlertTriangle },
-}
-
-const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null
-    const d = payload[0]?.payload
     return (
-        <div className="glass p-3 text-xs w-60">
-            <p className="font-semibold text-text mb-1">{d.label}</p>
-            <p className="text-muted mb-1">{d.desc}</p>
-            {d.ruleId && (
-                <p className="text-warn text-xs">Rule: {d.ruleId}</p>
-            )}
-            <p className="text-accent mt-1 font-mono font-bold">
-                {d.type === 'penalty' ? `+${d.bps} bps` : `${d.rate.toFixed(2)}%`}
-            </p>
+        <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono font-bold text-muted uppercase">{label}</span>
+                <div className="flex items-center gap-2 text-xs font-mono">
+                    <span className="text-muted">{base.toFixed(1)}</span>
+                    <ArrowRight size={10} className="text-muted" />
+                    <span className={`font-bold ${increased ? 'text-red' : 'text-green'}`}>
+                        {final.toFixed(label === 'Interest Rate' ? 2 : 1)}
+                        {label === 'Interest Rate' ? '%' : ' Cr'}
+                    </span>
+                </div>
+            </div>
+            <div className="relative h-3 bg-paper border border-border">
+                <div
+                    className="absolute inset-y-0 left-0 bg-muted/30"
+                    style={{ width: `${basePct}%` }}
+                />
+                <div
+                    className={`absolute inset-y-0 left-0 ${increased ? 'bg-red/70' : 'bg-green/70'}`}
+                    style={{ width: `${finalPct}%` }}
+                />
+            </div>
         </div>
     )
 }
 
-function buildChartData(decision) {
-    if (!decision) return buildChartData(MOCK_DECISION)
-
-    const rows = []
-
-    // Base rate bar
-    rows.push({
-        label: 'Base Rate',
-        rate: decision.base_rate_pct,
-        invisible: 0,
-        visible: decision.base_rate_pct,
-        type: 'base',
-        desc: 'Repo Rate + Bank Spread',
-        ruleId: null,
-        bps: 0,
-    })
-
-    // One bar per applied penalty
-    let running = decision.base_rate_pct
-    for (const p of (decision.applied_penalties || [])) {
-        const bps = p.rate_penalty_bps || 0
-        const meta = RULE_META[p.rule_id] || {}
-        rows.push({
-            label: meta.label || p.rule_id,
-            rate: running + bps / 100,
-            invisible: running,
-            visible: bps / 100,
-            type: 'penalty',
-            desc: p.trigger || meta.desc || '',
-            ruleId: p.rule_id,
-            bps,
-        })
-        running += bps / 100
-    }
-
-    // Final rate bar
-    rows.push({
-        label: 'Final Rate',
-        rate: decision.final_rate_pct,
-        invisible: 0,
-        visible: decision.final_rate_pct,
-        type: 'final',
-        desc: 'Recommended lending rate',
-        ruleId: null,
-        bps: 0,
-    })
-
-    return rows
-}
-
-const COLORS = { base: '#111111', penalty: '#B91C1C', final: '#B91C1C' }
-
-const CustomLabel = ({ x, y, width, value, type, bps }) => {
-    if (type !== 'penalty' || !bps) return null
-    return (
-        <text x={x + width / 2} y={y - 6} fill="#F59E0B" textAnchor="middle" fontSize={11} fontWeight={600}>
-            +{bps}bps
-        </text>
-    )
-}
-
-export default function WaterfallChart({ decision, triggeredRules = [] }) {
-    const chartData = buildChartData(decision)
+export default function WaterfallChart({ decision }) {
     const rec = decision?.recommendation || 'APPROVE'
-    const recStyle = RECOMMENDATION_STYLES[rec] || RECOMMENDATION_STYLES.APPROVE
-    const RecIcon = recStyle.icon
-
+    const verdict = VERDICT_CONFIG[rec] || VERDICT_CONFIG.APPROVE
+    const VerdictIcon = verdict.icon
+    const penalties = decision?.applied_penalties || []
     const isLive = !!decision
 
+    const finalRate = decision?.final_rate_pct ?? BASE_RATE
+    const finalLimit = decision?.final_limit_cr ?? BASE_LIMIT
+    const totalBps = penalties.reduce((sum, p) => sum + (p.rate_penalty_bps || 0), 0)
+
     return (
-        <div className="glass p-5 animate-fade-in space-y-5" style={{ backgroundColor: '#F5F0E4' }}>
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="font-semibold text-text flex items-center gap-2">
-                        Rate Waterfall
-                        {isLive && (
-                            <span className="badge bg-success/15 text-success text-xs">Live</span>
-                        )}
-                    </h3>
-                    <p className="text-xs text-muted mt-0.5">
-                        {isLive ? 'Penalties computed from your uploaded report' : 'Awaiting analysis — showing mock baseline'}
-                    </p>
+        <div className="flex flex-col gap-6">
+            {/* ── VERDICT BANNER ─────────────────────────────────────── */}
+            <div className={`border-[3px] ${verdict.border} ${verdict.bg} p-6 relative`}>
+                <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
+                    <div className="w-2 h-2 bg-ink" />
+                    CREDIT DECISION
                 </div>
-                <div className="flex items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#111111' }} />Base</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#B91C1C' }} />Penalty</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#B91C1C' }} />Final</span>
-                </div>
-            </div>
 
-            <ResponsiveContainer width="100%" height={240}>
-                <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#D4CFC4" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: '#111111', fontSize: 10 }} tickLine={false} axisLine={false}
-                        tickFormatter={(val) => {
-                            const key = Object.keys(WATERFALL_LABELS).find(k => val.startsWith(k))
-                            return key ? WATERFALL_LABELS[key] : val
-                        }}
-                    />
-                    <YAxis tickFormatter={v => `${v}%`} tick={{ fill: '#111111', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 14]} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59,130,246,0.05)' }} />
-                    <ReferenceLine y={BASE_RATE} stroke="#3B82F6" strokeDasharray="4 2" strokeOpacity={0.4} />
-                    <Bar dataKey="invisible" stackId="a" fill="transparent" />
-                    <Bar dataKey="visible" stackId="a" radius={[4, 4, 0, 0]}
-                        label={<CustomLabel />}
-                    >
-                        {chartData.map((entry, i) => (
-                            <Cell key={i} fill={COLORS[entry.type]} fillOpacity={entry.type === 'penalty' ? 0.85 : 1} />
-                        ))}
-                    </Bar>
-                </ComposedChart>
-            </ResponsiveContainer>
-
-            {/* Applied penalties list */}
-            {(decision?.applied_penalties?.length > 0) ? (
-                <div className="space-y-2">
-                    {decision.applied_penalties.map((p, i) => {
-                        const meta = RULE_META[p.rule_id] || {}
-                        return (
-                            <div key={i} className="flex items-center gap-3 bg-void rounded-lg px-3 py-2">
-                                <span className="badge bg-danger/15 text-danger">{WATERFALL_LABELS[p.rule_id] || p.rule_id}</span>
-                                <span className="text-xs text-muted flex-1">{p.trigger}</span>
-                                <span className="font-mono text-xs text-danger">+{p.rate_penalty_bps}bps</span>
-                                {p.limit_reduction_pct > 0 && (
-                                    <span className="font-mono text-xs text-warn">−{p.limit_reduction_pct}% limit</span>
-                                )}
+                <div className="flex items-center justify-between mt-1">
+                    <div className="flex items-center gap-4">
+                        <VerdictIcon size={36} className={verdict.color} strokeWidth={2.5} />
+                        <div>
+                            <div className={`text-2xl font-display font-black uppercase tracking-wide ${verdict.color}`}>
+                                {verdict.label}
                             </div>
-                        )
-                    })}
-                </div>
-            ) : isLive ? (
-                <div className="flex items-center gap-2 bg-success/5 border border-success/20 rounded-lg px-3 py-2.5">
-                    <CheckCircle size={13} className="text-success" />
-                    <p className="text-xs text-success">No penalties triggered — report is clean</p>
-                </div>
-            ) : (
-                <div className="flex items-center gap-2 text-xs text-muted bg-void rounded-lg px-3 py-2.5">
-                    <Info size={13} />
-                    Upload a report to compute live penalties
-                </div>
-            )}
+                            <p className="text-xs font-serif text-muted mt-0.5">
+                                {isLive ? verdict.sublabel : 'Awaiting report upload'}
+                            </p>
+                        </div>
+                    </div>
 
-            {/* Final decision card */}
-            <div className={`flex items-center justify-between ${recStyle.bg} border ${recStyle.border} rounded-lg px-4 py-3`}>
-                <div className="flex items-center gap-2">
-                    <RecIcon size={16} className={recStyle.color} />
-                    <div>
-                        <p className="text-xs text-muted">Decision</p>
-                        <p className={`font-bold ${recStyle.color}`}>{rec.replace(/_/g, ' ')}</p>
+                    <div className="flex gap-6">
+                        <div className="text-right">
+                            <div className="text-[10px] font-mono font-bold text-muted uppercase">Rate</div>
+                            <div className={`text-xl font-mono font-bold ${finalRate > BASE_RATE ? 'text-red' : 'text-green'}`}>
+                                {finalRate.toFixed(2)}%
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-[10px] font-mono font-bold text-muted uppercase">Limit</div>
+                            <div className={`text-xl font-mono font-bold ${finalLimit < BASE_LIMIT ? 'text-red' : 'text-green'}`}>
+                                ₹{finalLimit.toFixed(1)} Cr
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className="text-right space-y-0.5">
-                    <p className="text-xs text-muted">
-                        Rate: <span className={`font-mono font-bold ${recStyle.color}`}>{decision?.final_rate_pct?.toFixed(2) ?? BASE_RATE.toFixed(2)}%</span>
-                    </p>
-                    <p className="text-xs text-muted">
-                        Limit: <span className="font-semibold text-text">₹{decision?.final_limit_cr?.toFixed(1) ?? BASE_LIMIT.toFixed(1)} Cr</span>
-                    </p>
+            </div>
+
+            {/* ── RATE / LIMIT IMPACT BARS ────────────────────────────── */}
+            <div className="border-[3px] border-ink bg-paper p-5 relative">
+                <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
+                    <div className="w-2 h-2 bg-ink" />
+                    IMPACT SUMMARY
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                    <RateBar base={BASE_RATE} final={finalRate} label="Interest Rate" />
+                    <RateBar base={BASE_LIMIT} final={finalLimit} label="Credit Limit (₹ Cr)" />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 mt-5 pt-4 border-t-2 border-border">
+                    <div className="text-center">
+                        <div className="text-[10px] font-mono font-bold text-muted uppercase">Penalties</div>
+                        <div className="text-lg font-mono font-bold text-ink">{penalties.length}</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-[10px] font-mono font-bold text-muted uppercase">Total BPS Added</div>
+                        <div className={`text-lg font-mono font-bold ${totalBps > 0 ? 'text-red' : 'text-green'}`}>
+                            {totalBps > 0 ? `+${totalBps}` : '0'}
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-[10px] font-mono font-bold text-muted uppercase">Limit Cut</div>
+                        <div className={`text-lg font-mono font-bold ${finalLimit < BASE_LIMIT ? 'text-red' : 'text-green'}`}>
+                            {finalLimit < BASE_LIMIT ? `−${((1 - finalLimit / BASE_LIMIT) * 100).toFixed(0)}%` : 'None'}
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* ── PENALTY TABLE ───────────────────────────────────────── */}
+            {penalties.length > 0 ? (
+                <div className="border-[3px] border-ink bg-paper relative">
+                    <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
+                        <div className="w-2 h-2 bg-red" />
+                        TRIGGERED PENALTIES ({penalties.length})
+                    </div>
+
+                    <div className="divide-y-2 divide-border mt-2">
+                        {penalties.map((p, i) => (
+                            <div key={i} className="flex items-start gap-4 p-4">
+                                <div className="flex-shrink-0 w-16 text-center">
+                                    <span className="inline-block px-2 py-1 border-2 border-red text-red text-[10px] font-mono font-bold">
+                                        {p.rule_id}
+                                    </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-mono font-bold text-ink">
+                                        {(p.name || p.rule_id).replace(/^[A-Z]+-\d+:\s*/, '')}
+                                    </div>
+                                    <p className="text-xs font-serif text-muted mt-0.5 leading-relaxed">
+                                        {p.trigger}
+                                    </p>
+                                </div>
+                                <div className="flex-shrink-0 flex gap-3 items-center">
+                                    <div className="flex items-center gap-1 text-red">
+                                        <TrendingUp size={12} />
+                                        <span className="text-xs font-mono font-bold">+{p.rate_penalty_bps}bps</span>
+                                    </div>
+                                    {p.limit_reduction_pct > 0 && (
+                                        <div className="flex items-center gap-1 text-yellow">
+                                            <TrendingDown size={12} />
+                                            <span className="text-xs font-mono font-bold">−{p.limit_reduction_pct}%</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : isLive ? (
+                <div className="border-[3px] border-green bg-green/5 p-6 flex items-center gap-3">
+                    <CheckCircle size={20} className="text-green" />
+                    <div>
+                        <div className="text-sm font-mono font-bold text-green uppercase">Clean Report</div>
+                        <p className="text-xs font-serif text-muted">No penalties triggered — all scanners passed.</p>
+                    </div>
+                </div>
+            ) : null}
         </div>
     )
 }
