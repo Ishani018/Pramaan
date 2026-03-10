@@ -658,6 +658,20 @@ async def analyze_report(request: Request):
             auditor_blacklist = {"status": "NOT_CHECKED", "blacklisted": False, "watchlisted": False, "records": []}
         logger.info(f"[{elapsed()}] Auditor blacklist check done — status={auditor_blacklist.get('status')}")
 
+        # ── Step 5c: Loan Purpose Verification ─────────────────────────────────────
+        try:
+            from app.api.v1.external_mocks import verify_loan_purpose
+            mca_activity = getattr(mca_data, "business_activity", "") if mca_data else ""
+            loan_purpose_verification = verify_loan_purpose(
+                stated_purpose="",  # Will use demo default
+                bank_top_categories=None,  # Will use demo default
+                mca_activity=mca_activity,
+            )
+            logger.info(f"[{elapsed()}] Loan purpose verification done — status={loan_purpose_verification.get('overall_status')}")
+        except Exception as e:
+            logger.exception(f"Loan purpose verification failed: {e}")
+            loan_purpose_verification = {"status": "not_checked", "overall_status": "UNVERIFIABLE"}
+
         if latest_year not in per_year_scans or per_year_scans[latest_year].get("status") == "error":
             real_error_msg = per_year_scans.get(latest_year, {}).get("message", "Unknown error")
             logger.error(f"PIPELINE ABORTED. Reason: {real_error_msg}")
@@ -868,6 +882,7 @@ async def analyze_report(request: Request):
                     "per_year_scans": per_year_scans,
                     "restatement_data": restatement_data,
                     "auditor_blacklist": auditor_blacklist,
+                    "loan_purpose_verification": loan_purpose_verification,
                 }
             )
 
@@ -1069,6 +1084,7 @@ async def analyze_report(request: Request):
                 "triggered_rules": rating_result.triggered_rules if 'rating_result' in dir() else [],
             },
             "supply_chain_risk": latest_scan.get("supply_chain_risk", {}),
+            "loan_purpose_verification": loan_purpose_verification,
         }
     except Exception as inner_e:
         error_detail = traceback.format_exc()

@@ -1,4 +1,4 @@
-import { ShieldCheck, ShieldQuestion, AlertTriangle, CheckCircle, XCircle, HelpCircle, ChevronDown, ArrowRightLeft, TrendingDown, TrendingUp, Network, Layers } from 'lucide-react'
+import { ShieldCheck, ShieldQuestion, AlertTriangle, CheckCircle, XCircle, HelpCircle, ChevronDown, ArrowRightLeft, TrendingDown, TrendingUp, Network, Layers, Target, Flag } from 'lucide-react'
 import NetworkAnalysis from './NetworkAnalysis'
 import SupplyChainRiskPanel from './SupplyChainRiskPanel'
 
@@ -157,7 +157,121 @@ function GstReconciliationCard({ verification }) {
     )
 }
 
-export default function CrossVerificationPanel({ data, supplyChainData, networkData }) {
+// ── Loan Purpose Verification — Claimed vs Ground Truth ─────────────────
+function LoanPurposeCard({ data }) {
+    if (!data || data.status === 'not_checked') return null
+
+    const status = data.overall_status
+    const accent = status === 'MISMATCH' ? 'red' : status === 'PARTIAL_MISMATCH' ? 'yellow' : 'green'
+    const borderClass = `border-${accent}`
+    const bgClass = `bg-${accent}/5`
+    const textClass = `text-${accent}`
+    const statusLabel = status === 'MISMATCH' ? 'FUND DIVERSION DETECTED' : status === 'PARTIAL_MISMATCH' ? 'PARTIAL CONCERNS' : 'ALIGNED'
+
+    return (
+        <div className={`border-[3px] ${borderClass} ${bgClass} p-4 relative`}>
+            {/* Title badge */}
+            <div className={`absolute -top-2.5 left-3 ${bgClass} bg-paper px-2 font-display font-black uppercase tracking-wider text-[11px] flex items-center gap-1.5 ${textClass}`}>
+                <Target size={12} />
+                LOAN PURPOSE VERIFICATION
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold uppercase ${textClass} ${bgClass} border border-current`}>
+                    {statusLabel}
+                </span>
+            </div>
+
+            {/* Claimed vs Ground Truth — side by side */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+                {/* LEFT: Claimed Truth */}
+                <div className="border-2 border-ink/20 bg-paper p-3">
+                    <div className="text-[9px] font-mono font-bold text-muted uppercase mb-2 flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 bg-ink" /> CLAIMED PURPOSE
+                    </div>
+                    <div className="text-sm font-mono font-bold text-ink leading-snug">
+                        {data.stated_purpose}
+                    </div>
+                    {data.mca_alignment && (
+                        <div className={`mt-2 flex items-start gap-1.5 ${data.mca_alignment.aligned ? 'text-green' : 'text-yellow'}`}>
+                            {data.mca_alignment.aligned ? <CheckCircle size={11} className="mt-0.5 shrink-0" /> : <AlertTriangle size={11} className="mt-0.5 shrink-0" />}
+                            <span className="text-[10px] font-mono">{data.mca_alignment.detail}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* RIGHT: Ground Truth (fund utilization) */}
+                <div className={`border-2 ${borderClass} bg-paper p-3`}>
+                    <div className={`text-[9px] font-mono font-bold uppercase mb-2 flex items-center gap-1 ${textClass}`}>
+                        <div className={`w-1.5 h-1.5 bg-${accent}`} /> ACTUAL FUND UTILIZATION
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        {(data.fund_utilization || []).map((item, i) => {
+                            const isRisky = item.category.includes('Related Party') || item.category.includes('Real Estate') || item.category.includes('Unclassified')
+                            return (
+                                <div key={i} className="flex items-center gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between">
+                                            <span className={`text-[10px] font-mono truncate ${isRisky ? 'font-bold text-red' : 'text-ink'}`}>
+                                                {item.category}
+                                            </span>
+                                            <span className={`text-[10px] font-mono font-bold ml-1 shrink-0 ${isRisky ? 'text-red' : 'text-ink'}`}>
+                                                {item.percentage}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-1 bg-ink/10 mt-0.5">
+                                            <div
+                                                className={`h-full ${isRisky ? 'bg-red' : 'bg-ink/30'}`}
+                                                style={{ width: `${Math.min(item.percentage * 2, 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Flags */}
+            {data.flags && data.flags.length > 0 && (
+                <div className="mt-3 border-t border-ink/10 pt-2 flex flex-col gap-1.5">
+                    {data.flags.map((flag, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                            <Flag size={10} className={`mt-0.5 shrink-0 ${flag.severity === 'HIGH' ? 'text-red' : 'text-yellow'}`} />
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-1.5 py-0.5 text-[8px] font-mono font-bold uppercase ${flag.severity === 'HIGH' ? 'text-red border border-red bg-red/10' : 'text-yellow border border-yellow bg-yellow/10'}`}>
+                                        {flag.severity}
+                                    </span>
+                                    <span className="text-[9px] font-mono font-bold text-ink uppercase">
+                                        {flag.flag.replace(/_/g, ' ')}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] font-mono text-ink mt-0.5">{flag.detail}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Verdict */}
+            {data.verdict && (
+                <div className={`mt-2 border-l-2 ${borderClass} pl-2`}>
+                    <p className={`text-[10px] font-serif font-bold ${textClass}`}>{data.verdict}</p>
+                </div>
+            )}
+
+            {/* Rule trigger */}
+            {data.triggered_rules && data.triggered_rules.length > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                    {data.triggered_rules.map(rule => (
+                        <span key={rule} className="px-1.5 py-0.5 text-[9px] font-mono font-bold text-red border border-red bg-red/10">{rule}</span>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+export default function CrossVerificationPanel({ data, supplyChainData, networkData, loanPurposeData }) {
     if (!data || !data.verifications || data.verifications.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center p-10 bg-paper border-[3px] border-ink">
@@ -208,6 +322,9 @@ export default function CrossVerificationPanel({ data, supplyChainData, networkD
 
             {/* ── GST RECONCILIATION HERO ────────────────────────────────────── */}
             {gstVerification && <GstReconciliationCard verification={gstVerification} />}
+
+            {/* ── LOAN PURPOSE VERIFICATION ────────────────────────────────────── */}
+            {loanPurposeData && <LoanPurposeCard data={loanPurposeData} />}
 
             {/* ── SUPPLY CHAIN RISK ──────────────────────────────────────────── */}
             {supplyChainData && (

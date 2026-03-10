@@ -547,3 +547,137 @@ def check_auditor_blacklist(auditor_name: str) -> dict:
 async def mock_auditor_blacklist(auditor_name: str = ""):
     """Mock endpoint — in production, queries persistent institutional memory DB."""
     return check_auditor_blacklist(auditor_name)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# LOAN PURPOSE VERIFICATION — Claimed vs Ground Truth
+# ═════════════════════════════════════════════════════════════════════════════
+
+def verify_loan_purpose(
+    stated_purpose: str,
+    bank_top_categories: dict = None,
+    mca_activity: str = "",
+) -> dict:
+    """
+    Compares the borrower's stated loan purpose against ground truth signals
+    from bank statements, MCA filings, and supply chain data.
+
+    In production this would cross-reference:
+      - Loan application / sanction letter stated purpose
+      - Actual bank outflow categories (capex vs opex vs related-party)
+      - MCA registered business activity
+      - Supply chain vendor concentration
+    """
+    # ── Demo mock data (deterministic) ──────────────────────────────────────
+    if not stated_purpose:
+        stated_purpose = "Working Capital for manufacturing operations"
+
+    if not bank_top_categories:
+        bank_top_categories = {
+            "Vendor Payments (Raw Materials)": 31.2,
+            "Related Party Transfers": 24.8,
+            "Salary & Wages": 12.5,
+            "Real Estate / Property": 18.3,
+            "Utilities & Overheads": 8.1,
+            "Unclassified / Cash Withdrawals": 5.1,
+        }
+
+    if not mca_activity:
+        mca_activity = "Manufacture of textiles"
+
+    # ── Analyze mismatches ──────────────────────────────────────────────────
+    flags = []
+    overall_status = "MATCH"  # MATCH | PARTIAL_MISMATCH | MISMATCH
+
+    purpose_lower = stated_purpose.lower()
+    is_working_capital = any(k in purpose_lower for k in ["working capital", "operational", "manufacturing"])
+
+    # Flag 1: Related party transfers > 15%
+    related_party_pct = bank_top_categories.get("Related Party Transfers", 0)
+    if related_party_pct > 15:
+        flags.append({
+            "flag": "HIGH_RELATED_PARTY_OUTFLOW",
+            "severity": "HIGH" if related_party_pct > 25 else "MEDIUM",
+            "detail": f"{related_party_pct}% of bank outflows directed to related parties — inconsistent with stated working capital purpose",
+            "ground_truth_value": f"{related_party_pct}%",
+        })
+        overall_status = "MISMATCH" if related_party_pct > 25 else "PARTIAL_MISMATCH"
+
+    # Flag 2: Real estate spending when purpose is working capital
+    real_estate_pct = bank_top_categories.get("Real Estate / Property", 0)
+    if is_working_capital and real_estate_pct > 10:
+        flags.append({
+            "flag": "FUND_DIVERSION_REAL_ESTATE",
+            "severity": "HIGH",
+            "detail": f"{real_estate_pct}% of funds routed to real estate/property despite stated purpose being working capital",
+            "ground_truth_value": f"{real_estate_pct}%",
+        })
+        overall_status = "MISMATCH"
+
+    # Flag 3: Low vendor payments for working capital claims
+    vendor_pct = bank_top_categories.get("Vendor Payments (Raw Materials)", 0)
+    if is_working_capital and vendor_pct < 35:
+        flags.append({
+            "flag": "LOW_OPERATIONAL_SPEND",
+            "severity": "MEDIUM",
+            "detail": f"Only {vendor_pct}% of outflows to vendors/raw materials — expected >50% for genuine working capital usage",
+            "ground_truth_value": f"{vendor_pct}%",
+        })
+        if overall_status == "MATCH":
+            overall_status = "PARTIAL_MISMATCH"
+
+    # Flag 4: Unclassified cash > 10%
+    unclassified_pct = bank_top_categories.get("Unclassified / Cash Withdrawals", 0)
+    if unclassified_pct > 10:
+        flags.append({
+            "flag": "HIGH_UNCLASSIFIED_OUTFLOWS",
+            "severity": "MEDIUM",
+            "detail": f"{unclassified_pct}% of outflows are unclassified or cash withdrawals — cannot verify end-use",
+            "ground_truth_value": f"{unclassified_pct}%",
+        })
+        if overall_status == "MATCH":
+            overall_status = "PARTIAL_MISMATCH"
+
+    # ── Build ground truth summary ──────────────────────────────────────────
+    ground_truth_summary = []
+    sorted_cats = sorted(bank_top_categories.items(), key=lambda x: x[1], reverse=True)
+    for cat, pct in sorted_cats:
+        ground_truth_summary.append({"category": cat, "percentage": pct})
+
+    triggered_rules = []
+    if overall_status == "MISMATCH":
+        triggered_rules.append("P-34")
+
+    return {
+        "status": "verified",
+        "stated_purpose": stated_purpose,
+        "overall_status": overall_status,
+        "mca_business_activity": mca_activity,
+        "mca_alignment": _check_mca_alignment(purpose_lower, mca_activity.lower()),
+        "fund_utilization": ground_truth_summary,
+        "flags": flags,
+        "triggered_rules": triggered_rules,
+        "verdict": _build_verdict(overall_status, stated_purpose, flags),
+    }
+
+
+def _check_mca_alignment(purpose: str, mca: str) -> dict:
+    """Check if stated purpose aligns with MCA-registered business activity."""
+    # Simple keyword overlap check
+    # For demo, always show a realistic result
+    if any(k in mca for k in ["textile", "manufactur", "steel", "chemical", "pharma"]):
+        if any(k in purpose for k in ["working capital", "manufactur", "operational"]):
+            return {"aligned": True, "detail": f"Stated purpose consistent with MCA activity: '{mca.title()}'"}
+    return {"aligned": False, "detail": f"Stated purpose may not align with MCA activity: '{mca.title()}'"}
+
+
+def _build_verdict(status: str, purpose: str, flags: list) -> str:
+    """Build a human-readable verdict string."""
+    if status == "MATCH":
+        return f"Fund utilization pattern is consistent with the stated purpose: '{purpose}'"
+    elif status == "PARTIAL_MISMATCH":
+        flag_names = [f["flag"].replace("_", " ").title() for f in flags[:2]]
+        return f"Partial concerns detected — {', '.join(flag_names)}. Recommend enhanced monitoring of fund end-use."
+    else:
+        flag_names = [f["flag"].replace("_", " ").title() for f in flags[:2]]
+        return f"Significant fund diversion signals — {', '.join(flag_names)}. Recommend end-use audit before disbursement."

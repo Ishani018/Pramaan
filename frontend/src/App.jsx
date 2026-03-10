@@ -906,7 +906,7 @@ export default function App() {
 
                                 {/* ── TAB 2: VERIFY ───────────────────────────────── */}
                                 {activeTab === 'cross-verify' && (
-                                    <CrossVerificationPanel data={pdfResult?.cross_verification} supplyChainData={pdfResult?.supply_chain_risk} networkData={networkData} />
+                                    <CrossVerificationPanel data={pdfResult?.cross_verification} supplyChainData={pdfResult?.supply_chain_risk} networkData={networkData} loanPurposeData={pdfResult?.loan_purpose_verification} />
                                 )}
 
                                 {/* ── TAB 3: DEEP DIVE ──────────────────────────────── */}
