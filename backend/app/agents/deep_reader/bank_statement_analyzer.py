@@ -142,23 +142,29 @@ class BankStatementAnalyzer:
         transactions = []
         reader = csv.DictReader(io.StringIO(csv_content))
 
-        for row in reader:
+        for raw_row in reader:
+            if not any(raw_row.values()):
+                continue
+            
+            # Normalize keys to stripped lowercase for robust matching
+            row = {str(k).strip().lower(): v for k, v in raw_row.items() if k is not None}
+            
             try:
                 # 1. Flexible date/timestamp parsing
                 date_str = (
-                    row.get("transactionTimestamp") or 
-                    row.get("transactionDate") or
-                    row.get("valueDate") or
-                    row.get("Date") or row.get("date") or
-                    row.get("Transaction Date") or row.get("Txn Date") or ""
+                    row.get("transactiontimestamp") or 
+                    row.get("transactiondate") or
+                    row.get("valuedate") or
+                    row.get("date") or
+                    row.get("transaction date") or row.get("txn date") or ""
                 ).strip()
                 date = self._parse_date(date_str)
 
                 # 2. Flexible description/narration parsing
                 desc = (
                     row.get("narration") or
-                    row.get("Description") or row.get("description") or
-                    row.get("Particulars") or row.get("Narration") or ""
+                    row.get("description") or
+                    row.get("particulars") or ""
                 ).strip()
 
                 # 3. Flexible debit/credit logic (handle 'type' + 'amount' or direct columns)
@@ -172,24 +178,26 @@ class BankStatementAnalyzer:
                 else:
                     # Fallback to direct debit/credit columns
                     debit = self._parse_amount(
-                        row.get("Debit") or row.get("debit") or
-                        row.get("Withdrawal") or "0"
+                        row.get("debit") or
+                        row.get("withdrawal") or "0"
                     )
                     credit = self._parse_amount(
-                        row.get("Credit") or row.get("credit") or
-                        row.get("Deposit") or "0"
+                        row.get("credit") or
+                        row.get("deposit") or "0"
                     )
 
                 # 4. Flexible balance parsing
                 balance = self._parse_amount(
-                    row.get("currentBalance") or
-                    row.get("Balance") or row.get("balance") or
-                    row.get("Closing Balance") or "0"
+                    row.get("currentbalance") or
+                    row.get("balance") or
+                    row.get("closing balance") or "0"
                 )
 
-                if date:
+                if date or (txn_type in ["DEBIT", "CREDIT"] and amount_val > 0):
+                    # Use provided date or fallback to a dummy if crucial
+                    trans_date = date or datetime.now()
                     transactions.append({
-                        "date": date,
+                        "date": trans_date,
                         "date_str": date_str,
                         "description": desc,
                         "debit": debit,
@@ -205,7 +213,7 @@ class BankStatementAnalyzer:
         return transactions
 
     def _parse_date(self, date_str: str) -> Optional[datetime]:
-        """Try multiple date formats including ISO timestamps."""
+        """Try multiple date formats including ISO timestamps and common Indian formats."""
         if not date_str:
             return None
             
@@ -215,12 +223,24 @@ class BankStatementAnalyzer:
         except (ValueError, TypeError):
             pass
 
-        for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%b-%Y", "%d %b %Y", "%Y-%m-%dT%H:%M:%S"]:
+        # Comprehensive list of formats often found in bank statements
+        formats = [
+            "%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%b-%Y", "%d %b %Y",
+            "%Y-%m-%dT%H:%M:%S",
+            "%d-%m-%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S",
+            "%d-%m-%Y %H:%M", "%d/%m/%Y %H:%M",
+            "%d %b %Y %H:%M:%S", "%d-%b-%Y %H:%M:%S"
+        ]
+        
+        for fmt in formats:
             try:
-                return datetime.strptime(date_str, fmt)
+                # Use split to handle cases with trailing timezones or junk
+                return datetime.strptime(date_str.split('.')[0].strip(), fmt)
             except ValueError:
                 continue
+        
         return None
+
 
     def _parse_amount(self, val: str) -> float:
         """Parse amount, removing commas and handling blanks."""

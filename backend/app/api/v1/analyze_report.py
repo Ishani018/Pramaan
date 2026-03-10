@@ -256,6 +256,10 @@ async def analyze_report(request: Request):
                     )
                     fin_text = get_full_text(fin_pages_data)
                     
+                    # DEBUG DUMP
+                    with open("debug_fin_text.txt", "w", encoding="utf-8") as f:
+                        f.write(fin_text)
+                        
                     extractor = FinancialExtractor()
                     extracted_figures = await run_in_threadpool(extractor.extract, text=fin_text, year=year)
                     logger.info(f"Financial figures: {extracted_figures}")
@@ -265,6 +269,7 @@ async def analyze_report(request: Request):
                     logger.exception(f"FinancialExtractor failed for {year}: {e}")
                     extracted_figures = {}
                 logger.info(f"[{elapsed()}] FinancialExtractor done")
+
 
                 # ── Step 4.0.1: Collateral Assessor ──────────────────────────────────────────
                 try:
@@ -613,6 +618,11 @@ async def analyze_report(request: Request):
             bank_csv_file = form.get("bank_csv")
             if bank_csv_file and getattr(bank_csv_file, "filename", None):
                 bank_csv_content = (await bank_csv_file.read()).decode("utf-8")
+                
+                # DEBUG DUMP
+                with open("debug_bank_statement.csv", "w", encoding="utf-8") as f:
+                    f.write(bank_csv_content)
+                
                 bank_analyzer = BankStatementAnalyzer()
                 bank_result = bank_analyzer.analyze(bank_csv_content)
                 logger.info(

@@ -65,6 +65,7 @@ async def mock_perfios():
         "gstr_2a_3b_mismatch_pct": 18.5,      # > 15% → P-01 Ghost Input Trap
         "circular_trading_flag": False,
         "gst_filing_consistency": "Irregular",  # 2 delayed + 1 not filed
+        "gst_filing_discipline_score": 83.3,
         "itc_reversal_required": True,
         "itc_reversal_amount_lakh": 12.4,
         "gst_turnover_cr": 105.2,
