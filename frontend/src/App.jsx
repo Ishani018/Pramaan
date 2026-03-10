@@ -27,6 +27,7 @@ import BankStatementPanel from './components/BankStatementPanel'
 import SectorBenchmarkPanel from './components/SectorBenchmarkPanel'
 import CrossVerificationPanel from './components/CrossVerificationPanel'
 import BSESearch from './components/BSESearch'
+import SupplyChainRiskPanel from './components/SupplyChainRiskPanel'
 
 export const RULE_DISPLAY_NAMES = {
     "P-01": "GST-01: Revenue Mismatch",
@@ -1025,6 +1026,19 @@ export default function App() {
                                 {/* ── TAB 5: FINANCIALS ─────────────────────────────── */}
                                 {activeTab === 'financials' && (
                                     <div className="flex flex-col gap-4">
+                                        <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                    <div className="w-2 h-2 bg-ink" />
+                                                    Supply Chain Risk
+                                                </div>
+                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="p-5">
+                                                <SupplyChainRiskPanel data={pdfResult?.supply_chain_risk} />
+                                            </div>
+                                        </details>
+
                                         <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">

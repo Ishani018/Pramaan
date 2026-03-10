@@ -50,6 +50,16 @@ from app.agents.external.counterparty_intel import CounterpartyIntel, NetworkInt
 import os
 from app.core.config import settings
 
+_BACKEND_ROOT = Path(__file__).resolve().parents[3]
+_SRC_PATH = _BACKEND_ROOT / "src"
+if _SRC_PATH.exists() and str(_SRC_PATH) not in sys.path:
+    sys.path.append(str(_SRC_PATH))
+
+try:
+    from supply_chain_risk import run_supply_chain_risk
+except Exception:
+    run_supply_chain_risk = None
+
 # 1. Get the logger for this specific file
 logger = logging.getLogger(__name__)
 
@@ -150,6 +160,7 @@ async def analyze_report(request: Request):
                 continue
 
             tmp_path: Path | None = None
+            supply_chain_result: dict = {}
             try:
                 # ── Save upload ──────────────────────────────────────────────────────
                 suffix = f"_{uuid.uuid4().hex}.pdf"
@@ -265,6 +276,19 @@ async def analyze_report(request: Request):
                     logger.exception(f"FinancialExtractor failed for {year}: {e}")
                     extracted_figures = {}
                 logger.info(f"[{elapsed()}] FinancialExtractor done")
+
+                # ── Step 4.0: Supply Chain Risk (deterministic) ───────────────────
+                if run_supply_chain_risk and fin_text:
+                    try:
+                        supply_chain_result = await run_in_threadpool(run_supply_chain_risk, fin_text)
+                        logger.info(
+                            f"[{elapsed()}] SupplyChainRisk done — "
+                            f"overall={supply_chain_result.get('overall_supply_chain_risk_band')}, "
+                            f"weakest_link={supply_chain_result.get('weakest_link')}"
+                        )
+                    except Exception as e:
+                        logger.exception(f"SupplyChainRisk failed for {year}: {e}")
+                        supply_chain_result = {}
 
                 # ── Step 4.0.1: Collateral Assessor ──────────────────────────────────────────
                 try:
@@ -557,6 +581,7 @@ async def analyze_report(request: Request):
                     "news_data":                 news_data,
                     "ecourts_data":              ecourts_data,
                     "mda_insights":              mda_insights,
+                    "supply_chain_risk":         supply_chain_result,
                 }
             
             except Exception as exc:
@@ -986,6 +1011,7 @@ async def analyze_report(request: Request):
                 "ratings_found": rating_result.ratings_found if 'rating_result' in dir() else [],
                 "triggered_rules": rating_result.triggered_rules if 'rating_result' in dir() else [],
             },
+            "supply_chain_risk": latest_scan.get("supply_chain_risk", {}),
         }
     except Exception as inner_e:
         error_detail = traceback.format_exc()

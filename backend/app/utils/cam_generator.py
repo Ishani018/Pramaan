@@ -149,6 +149,7 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     news_data   = data.get("news_data") or {}
     restate     = data.get("restatement_data") or {}
     site_visit  = data.get("site_visit_scan") or {}
+    supply_chain = (pdf_scan.get("supply_chain_risk") if pdf_scan else {}) or {}
     
     # Reconstruct extracted figures
     figs = pdf_scan.get("extracted_figures", {}) if pdf_scan else {}
@@ -362,6 +363,29 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     _kv_row(c6_tbl, "CARO Findings", "⚠ Default True [AUDIT-01]" if caro else "✓ Clear", DANGER_RED if caro else SUCCESS_GREEN)
     _kv_row(c6_tbl, "Emphasis of Matter", "⚠ Flaged [AUDIT-02]" if eom else "✓ Clear", WARN_AMBER if eom else SUCCESS_GREEN)
     doc.add_paragraph()
+
+    if supply_chain:
+        _add_sub_header(doc, "SUPPLY CHAIN RISK (IMMEDIATE VALUE CHAIN)")
+        sc_tbl = _create_styled_table(doc, 0, 2)
+        sc_tbl.columns[0].width = Inches(2.5)
+
+        _kv_row(sc_tbl, "Overall Supply Chain Risk", f"{supply_chain.get('overall_supply_chain_risk_band', 'Unknown')} ({supply_chain.get('overall_supply_chain_risk_score', 0)})")
+        _kv_row(sc_tbl, "Upstream Supplier Risk", f"{supply_chain.get('supplier_risk_band', 'Unknown')} ({supply_chain.get('supplier_risk_score', 0)})")
+        _kv_row(sc_tbl, "Downstream Buyer Risk", f"{supply_chain.get('buyer_risk_band', 'Unknown')} ({supply_chain.get('buyer_risk_score', 0)})")
+        _kv_row(sc_tbl, "Weakest Link", supply_chain.get("weakest_link", "Not determined"))
+        _kv_row(sc_tbl, "Major Supplier", supply_chain.get("major_supplier", "Not explicitly identified"))
+        _kv_row(sc_tbl, "Major Buyer", supply_chain.get("major_buyer", "Not explicitly identified"))
+
+        reasons = supply_chain.get("reasons", [])
+        if reasons:
+            _add_body_para(doc, "Detected reasons:", bold=True)
+            for reason in reasons[:5]:
+                doc.add_paragraph(reason, style="List Bullet")
+
+        cam_text = supply_chain.get("cam_paragraph")
+        if cam_text:
+            _add_body_para(doc, cam_text)
+        doc.add_paragraph()
 
     mda = data.get("mda_insights", {})
     if mda.get("status") == "success":
