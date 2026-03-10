@@ -23,7 +23,7 @@ const FLAG_ICONS = {
     circular_loop: AlertTriangle,
 }
 
-function CounterpartyCard({ profile, flags, isExpanded, onToggle }) {
+function CounterpartyCard({ profile, flags, isExpanded, onToggle, isCircular }) {
     const isShell = profile.is_shell_suspect
     const relatedFlags = flags.filter(f =>
         f.entity_a === profile.name || f.entity_b === profile.name
@@ -47,6 +47,9 @@ function CounterpartyCard({ profile, flags, isExpanded, onToggle }) {
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-sm font-bold text-ink truncate tracking-tight">{profile.name}</span>
+                            {isCircular && (
+                                <span className="px-1.5 py-0.5 bg-red text-white text-[9px] font-mono font-bold uppercase tracking-widest border border-red">CIRCULAR</span>
+                            )}
                             {isShell && (
                                 <span className="px-1.5 py-0.5 bg-red text-white text-[9px] font-mono font-bold uppercase tracking-widest border border-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">SHELL</span>
                             )}
@@ -145,93 +148,52 @@ function CircularFlowSVG({ loop }) {
     const ratio = details.amount_ratio
 
     return (
-        <div className="relative p-6 border-2 border-red/40 bg-paper-raised group overflow-hidden">
-            {/* Background pattern */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
-                style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
-
-            <div className="relative z-10">
-                <div className="flex flex-col items-center gap-8">
-                    {/* Nodes and Flow */}
-                    <div className="w-full flex items-center justify-between gap-2 max-w-md mx-auto">
-                        {/* Source Node */}
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="w-14 h-14 bg-ink flex items-center justify-center border-4 border-ink shadow-[4px_4px_0px_rgba(0,0,0,0.2)]">
-                                <Building2 size={24} className="text-paper" />
-                            </div>
-                            <span className="text-[10px] font-mono font-black text-ink uppercase text-center max-w-[80px] leading-tight">
-                                {loop.entity_a.split(' ')[0]}
-                            </span>
-                        </div>
-
-                        {/* Animated Flow Track */}
-                        <div className="flex-1 h-32 relative flex items-center">
-                            {/* SVG Arrow paths */}
-                            <svg className="w-full h-full overflow-visible" viewBox="0 0 200 100">
-                                {/* Top path (Debit) */}
-                                <path
-                                    d="M 10 30 Q 100 -20 190 30"
-                                    fill="none"
-                                    stroke="#ef4444"
-                                    strokeWidth="2"
-                                    strokeDasharray="4 4"
-                                    className="animate-flow-dash"
-                                />
-                                <text x="100" y="10" textAnchor="middle" className="fill-red font-mono text-[10px] font-bold uppercase tracking-widest">{debitAmt}</text>
-
-                                {/* Bottom path (Credit) */}
-                                <path
-                                    d="M 190 70 Q 100 120 10 70"
-                                    fill="none"
-                                    stroke="#ef4444"
-                                    strokeWidth="2"
-                                    className="opacity-50"
-                                />
-                                <text x="100" y="95" textAnchor="middle" className="fill-red font-mono text-[10px] font-bold uppercase tracking-widest">{creditAmt}</text>
-
-                                {/* Pulse circles */}
-                                <circle r="3" fill="#ef4444">
-                                    <animateMotion dur="2s" repeatCount="indefinite" path="M 10 30 Q 100 -20 190 30" />
-                                </circle>
-                                <circle r="3" fill="#ef4444">
-                                    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 190 70 Q 100 120 10 70" />
-                                </circle>
-                            </svg>
-                        </div>
-
-                        {/* Counterparty Node */}
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="w-14 h-14 bg-red/10 flex items-center justify-center border-4 border-red shadow-[4px_4px_0px_rgba(239,68,68,0.2)]">
-                                <Building2 size={24} className="text-red" />
-                            </div>
-                            <span className="text-[10px] font-mono font-black text-red uppercase text-center max-w-[80px] leading-tight">
-                                {loop.entity_b.split(' ')[0]}
-                            </span>
-                        </div>
+        <div className="relative p-3 border-2 border-red/40 bg-paper-raised group overflow-hidden">
+            <div className="relative z-10 flex items-center gap-3">
+                {/* Source Node */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <div className="w-9 h-9 bg-ink flex items-center justify-center border-2 border-ink">
+                        <Building2 size={14} className="text-paper" />
                     </div>
-
-                    {/* Metadata indicators */}
-                    <div className="flex items-center gap-6 mt-2">
-                        <div className="flex flex-col items-center">
-                            <span className="text-[8px] font-mono text-muted uppercase font-bold mb-1 tracking-widest">Time Gap</span>
-                            <div className={`px-2 py-1 border-2 font-mono text-xs font-black ${gap <= 7 ? 'bg-red text-white border-red' : 'border-border text-ink'}`}>
-                                {gap} DAYS
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <span className="text-[8px] font-mono text-muted uppercase font-bold mb-1 tracking-widest">Value Match</span>
-                            <div className={`px-2 py-1 border-2 font-mono text-xs font-black ${ratio > 0.8 ? 'bg-red text-white border-red' : 'border-border text-ink'}`}>
-                                {(ratio * 100).toFixed(0)}%
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <span className="text-[8px] font-mono text-muted uppercase font-bold mb-1 tracking-widest">Signal</span>
-                            <div className="px-2 py-1 border-2 border-red text-red font-mono text-xs font-black uppercase tracking-tighter">
-                                ROUND-TRIP
-                            </div>
-                        </div>
-                    </div>
+                    <span className="text-[8px] font-mono font-black text-ink uppercase text-center max-w-[60px] leading-tight truncate">
+                        {loop.entity_a.split(' ')[0]}
+                    </span>
                 </div>
+
+                {/* Animated Flow Track — compact */}
+                <div className="flex-1 h-16 relative flex items-center min-w-0">
+                    <svg className="w-full h-full overflow-visible" viewBox="0 0 200 60" preserveAspectRatio="none">
+                        <path d="M 10 18 Q 100 -8 190 18" fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" className="animate-flow-dash" />
+                        <text x="100" y="8" textAnchor="middle" className="fill-red font-mono" style={{ fontSize: '9px', fontWeight: 700 }}>{debitAmt}</text>
+                        <path d="M 190 42 Q 100 68 10 42" fill="none" stroke="#ef4444" strokeWidth="2" className="opacity-50" />
+                        <text x="100" y="58" textAnchor="middle" className="fill-red font-mono" style={{ fontSize: '9px', fontWeight: 700 }}>{creditAmt}</text>
+                        <circle r="2.5" fill="#ef4444"><animateMotion dur="2s" repeatCount="indefinite" path="M 10 18 Q 100 -8 190 18" /></circle>
+                        <circle r="2.5" fill="#ef4444"><animateMotion dur="2.5s" repeatCount="indefinite" path="M 190 42 Q 100 68 10 42" /></circle>
+                    </svg>
+                </div>
+
+                {/* Counterparty Node */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <div className="w-9 h-9 bg-red/10 flex items-center justify-center border-2 border-red">
+                        <Building2 size={14} className="text-red" />
+                    </div>
+                    <span className="text-[8px] font-mono font-black text-red uppercase text-center max-w-[60px] leading-tight truncate">
+                        {loop.entity_b.split(' ')[0]}
+                    </span>
+                </div>
+            </div>
+
+            {/* Metadata — inline row */}
+            <div className="flex items-center justify-center gap-3 mt-2 pt-2 border-t border-red/20">
+                <span className={`px-1.5 py-0.5 border font-mono text-[9px] font-black ${gap <= 7 ? 'bg-red text-white border-red' : 'border-border text-ink'}`}>
+                    {gap}d
+                </span>
+                <span className={`px-1.5 py-0.5 border font-mono text-[9px] font-black ${ratio > 0.8 ? 'bg-red text-white border-red' : 'border-border text-ink'}`}>
+                    {(ratio * 100).toFixed(0)}%
+                </span>
+                <span className="px-1.5 py-0.5 border border-red text-red font-mono text-[9px] font-black uppercase">
+                    ROUND-TRIP
+                </span>
             </div>
         </div>
     )
@@ -265,141 +227,149 @@ export default function NetworkAnalysis({ data }) {
     const mcaMatches = profiles.filter(p => p.mca_found).length
     const applicantName = data?.nodes?.find(n => n.type === 'applicant')?.label?.split('\n')[0] || 'Applicant'
 
+    const circularLoops = flags.filter(f => f.flag_type === 'circular_loop')
+
     return (
-        <div className="flex flex-col gap-8 animate-fade-in max-w-4xl mx-auto">
+        <div className="flex flex-col gap-5 animate-fade-in max-w-4xl mx-auto">
             {/* ── SUMMARY DASH ── */}
-            <div className="border-[3px] border-ink bg-paper p-6 relative shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+            <div className="border-[3px] border-ink bg-paper p-4 relative shadow-[6px_6px_0px_rgba(0,0,0,1)]">
                 <div className="absolute -top-3 left-4 bg-ink px-3 py-0.5 font-display font-black text-paper uppercase tracking-widest text-xs flex items-center gap-2">
                     <Zap size={10} fill="currentColor" />
                     Forensic Intelligence Summary
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mt-2">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-2">
                     <div className="group">
                         <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Entities</div>
-                        <div className="text-3xl font-mono font-black text-ink group-hover:translate-x-1 transition-transform">{profiles.length}</div>
+                        <div className="text-2xl font-mono font-black text-ink">{profiles.length}</div>
                     </div>
                     <div className="group">
                         <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">MCA Verified</div>
-                        <div className="text-3xl font-mono font-black text-ink group-hover:translate-x-1 transition-transform">{mcaMatches}</div>
+                        <div className="text-2xl font-mono font-black text-ink">{mcaMatches}</div>
                     </div>
                     <div className="group">
                         <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Shell Suspects</div>
-                        <div className={`text-3xl font-mono font-black ${shellCount > 0 ? 'text-red animate-pulse' : 'text-green opacity-40'}`}>{shellCount}</div>
+                        <div className={`text-2xl font-mono font-black ${shellCount > 0 ? 'text-red animate-pulse' : 'text-green opacity-40'}`}>{shellCount}</div>
                     </div>
                     <div className="group">
                         <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Risk Flags</div>
-                        <div className={`text-3xl font-mono font-black ${flags.length > 0 ? 'text-yellow' : 'text-green opacity-40'}`}>{flags.length}</div>
+                        <div className={`text-2xl font-mono font-black ${flags.length > 0 ? 'text-yellow' : 'text-green opacity-40'}`}>{flags.length}</div>
+                    </div>
+                    <div className="group">
+                        <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Round-trips</div>
+                        <div className={`text-2xl font-mono font-black ${circularLoops.length > 0 ? 'text-red' : 'text-green opacity-40'}`}>{circularLoops.length}</div>
                     </div>
                 </div>
 
                 {detected && (
-                    <div className="mt-6 p-4 border-2 border-red bg-red/5 flex items-center gap-4 border-l-[8px] shadow-[4px_4px_0px_rgba(239,68,68,0.1)]">
-                        <div className="w-10 h-10 bg-red flex items-center justify-center flex-shrink-0">
-                            <AlertTriangle size={20} className="text-white" />
+                    <div className="mt-4 p-3 border-2 border-red bg-red/5 flex items-center gap-3 border-l-[6px]">
+                        <div className="w-8 h-8 bg-red flex items-center justify-center flex-shrink-0">
+                            <AlertTriangle size={16} className="text-white" />
                         </div>
                         <div className="flex-1">
-                            <span className="text-[11px] font-mono font-black text-red uppercase tracking-widest block leading-none mb-1">
+                            <span className="text-[10px] font-mono font-black text-red uppercase tracking-widest block leading-none mb-0.5">
                                 P-06: CIRCULAR TRADING DETECTED
                             </span>
                             <span className="text-[9px] font-mono font-bold text-red/80 uppercase tracking-tight">
-                                PENALTY APPLIED: +200bps RATE · -30% CREDIT LIMIT · HIGH RISK
+                                +200bps RATE · -30% LIMIT · HIGH RISK
                             </span>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* ── RELATIONSHIP LIST ── */}
-            <div className="flex flex-col lg:flex-row gap-6 items-start">
-                <div className="flex-1 w-full border-[3px] border-ink bg-paper p-6 relative">
-                    <div className="absolute -top-3 left-4 bg-paper border-2 border-ink px-3 py-0.5 font-display font-black text-ink uppercase tracking-widest text-xs">
-                        Entity Linkage Map
+            {/* ── P-06 CIRCULAR FLOWS (grid, before entity list) ── */}
+            {circularLoops.length > 0 && (
+                <div className="border-[3px] border-red bg-paper p-4 relative">
+                    <div className="absolute -top-3 left-4 bg-red px-2 py-0.5 font-mono font-black text-white uppercase tracking-tighter text-[10px] flex items-center gap-2">
+                        <AlertTriangle size={10} />
+                        P-06 ROUND-TRIP FLOWS
                     </div>
 
-                    {/* Applicant Hub */}
-                    <div className="flex items-center gap-4 mb-6 p-4 border-[3px] border-ink bg-ink text-paper group overflow-hidden relative">
-                        <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-30 transition-opacity">
-                            <Shield size={60} />
-                        </div>
-                        <div className="w-12 h-12 bg-paper flex items-center justify-center border-2 border-ink">
-                            <Building2 size={20} className="text-ink" />
-                        </div>
-                        <div>
-                            <div className="text-base font-mono font-black uppercase tracking-tight leading-none mb-1">{applicantName}</div>
-                            <div className="text-[10px] font-mono font-bold text-paper/60 uppercase tracking-widest italic">Primary Subject Organization</div>
-                        </div>
+                    <div className={`grid gap-3 mt-2 ${circularLoops.length === 1 ? 'grid-cols-1 max-w-md' : circularLoops.length === 2 ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-3'}`}>
+                        {circularLoops.map((loop, i) => (
+                            <CircularFlowSVG key={i} loop={loop} />
+                        ))}
                     </div>
 
-                    <div className="flex flex-col gap-3">
-                        {profiles
-                            .sort((a, b) => {
-                                if (a.is_shell_suspect && !b.is_shell_suspect) return -1
-                                if (!a.is_shell_suspect && b.is_shell_suspect) return 1
-                                const aFlags = flags.filter(f => f.entity_a === a.name || f.entity_b === a.name).length
-                                const bFlags = flags.filter(f => f.entity_a === b.name || f.entity_b === b.name).length
-                                return bFlags - aFlags
-                            })
-                            .map((profile, i) => (
+                    {findings.length > 0 && (
+                        <div className="border-t-2 border-red/20 pt-3 mt-3 flex flex-col gap-1.5">
+                            <div className="text-[9px] font-mono font-black text-red uppercase tracking-widest">Auditor Narrative</div>
+                            {findings.map((f, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                    <div className="w-1 h-1 bg-red mt-1.5 flex-shrink-0" />
+                                    <p className="text-[10px] font-serif text-ink italic leading-relaxed opacity-90">{f}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── ENTITY LINKAGE MAP ── */}
+            <div className="border-[3px] border-ink bg-paper p-4 relative">
+                <div className="absolute -top-3 left-4 bg-paper border-2 border-ink px-3 py-0.5 font-display font-black text-ink uppercase tracking-widest text-xs">
+                    Entity Linkage Map
+                </div>
+
+                {/* Applicant Hub */}
+                <div className="flex items-center gap-3 mb-4 p-3 border-[3px] border-ink bg-ink text-paper group overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-30 transition-opacity">
+                        <Shield size={48} />
+                    </div>
+                    <div className="w-10 h-10 bg-paper flex items-center justify-center border-2 border-ink">
+                        <Building2 size={16} className="text-ink" />
+                    </div>
+                    <div>
+                        <div className="text-sm font-mono font-black uppercase tracking-tight leading-none mb-0.5">{applicantName}</div>
+                        <div className="text-[9px] font-mono font-bold text-paper/60 uppercase tracking-widest italic">Primary Subject</div>
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                    {profiles
+                        .sort((a, b) => {
+                            // Circular parties first
+                            const aCirc = flags.some(f => f.flag_type === 'circular_loop' && (f.entity_a === a.name || f.entity_b === a.name))
+                            const bCirc = flags.some(f => f.flag_type === 'circular_loop' && (f.entity_a === b.name || f.entity_b === b.name))
+                            if (aCirc && !bCirc) return -1
+                            if (!aCirc && bCirc) return 1
+                            if (a.is_shell_suspect && !b.is_shell_suspect) return -1
+                            if (!a.is_shell_suspect && b.is_shell_suspect) return 1
+                            const aFlags = flags.filter(f => f.entity_a === a.name || f.entity_b === a.name).length
+                            const bFlags = flags.filter(f => f.entity_a === b.name || f.entity_b === b.name).length
+                            return bFlags - aFlags
+                        })
+                        .map((profile, i) => {
+                            const isCircularParty = flags.some(f => f.flag_type === 'circular_loop' && (f.entity_a === profile.name || f.entity_b === profile.name))
+                            return (
                                 <div key={i} className="flex items-start">
-                                    {/* Architectural Connector */}
-                                    <div className="w-10 flex-shrink-0 flex flex-col items-center pt-5">
-                                        <div className={`w-3 h-3 border-2 ${profile.is_shell_suspect ? 'border-red bg-red' : 'border-ink'} rotate-45 mb-1 shadow-[2px_2px_0px_rgba(0,0,0,0.1)]`} />
-                                        <div className={`w-[2px] h-10 border-l-2 border-dashed ${profile.is_shell_suspect ? 'border-red/40' : 'border-border'}`} />
+                                    {/* Connector */}
+                                    <div className="w-8 flex-shrink-0 flex flex-col items-center pt-4">
+                                        <div className={`w-2.5 h-2.5 border-2 ${isCircularParty ? 'border-red bg-red' : profile.is_shell_suspect ? 'border-red bg-red' : 'border-ink'} rotate-45 mb-1`} />
+                                        <div className={`w-[2px] h-6 border-l-2 border-dashed ${isCircularParty ? 'border-red/60' : profile.is_shell_suspect ? 'border-red/40' : 'border-border'}`} />
                                     </div>
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <CounterpartyCard
                                             profile={profile}
                                             flags={flags}
                                             isExpanded={expandedIdx === i}
                                             onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
+                                            isCircular={isCircularParty}
                                         />
                                     </div>
                                 </div>
-                            ))
-                        }
-                    </div>
+                            )
+                        })
+                    }
                 </div>
+            </div>
 
-                {/* ── FLOW ANALYSIS SIDEBAR (Circular Loops) ── */}
-                {detected && (
-                    <div className="lg:w-[400px] w-full flex flex-col gap-6">
-                        <div className="border-[3px] border-red bg-paper p-5 relative">
-                            <div className="absolute -top-3 left-4 bg-red px-2 py-0.5 font-mono font-black text-white uppercase tracking-tighter text-[10px] flex items-center gap-2">
-                                <AlertTriangle size={10} />
-                                RULE P-06 ANALYSIS
-                            </div>
-
-                            <div className="flex flex-col gap-6 mt-4">
-                                {flags.filter(f => f.flag_type === 'circular_loop').map((loop, i) => (
-                                    <CircularFlowSVG key={i} loop={loop} />
-                                ))}
-
-                                {findings.length > 0 && (
-                                    <div className="border-t-2 border-red/20 pt-4 flex flex-col gap-3">
-                                        <div className="text-[9px] font-mono font-black text-red uppercase tracking-widest">Auditor Narrative</div>
-                                        {findings.map((f, i) => (
-                                            <div key={i} className="flex items-start gap-3">
-                                                <div className="w-1.5 h-1.5 bg-red mt-1.5 flex-shrink-0" />
-                                                <p className="text-[11px] font-serif text-ink italic leading-relaxed opacity-90">{f}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Methodology Stamping */}
-                        <div className="border-2 border-border bg-paper p-4 opacity-60 grayscale hover:grayscale-0 transition-all cursor-default">
-                            <div className="text-[8px] font-mono font-black text-muted uppercase mb-2 tracking-[0.2em]">Verification Protocol</div>
-                            <p className="text-[9px] font-mono text-ink tracking-tight leading-loose uppercase font-bold">
-                                Transacting entities parsed from bank statements and queried against MCA v3 database.
-                                Shell linkage detection threshold: &lt;1L Capital + &lt;2yr Lifecycle.
-                                Deterministic Cross-Referencing. <span className="text-ink underline underline-offset-2">No LLM Input.</span>
-                            </p>
-                        </div>
-                    </div>
-                )}
+            {/* Methodology — compact */}
+            <div className="border border-border bg-paper px-4 py-2 opacity-50 hover:opacity-80 transition-opacity">
+                <p className="text-[8px] font-mono text-ink tracking-tight uppercase font-bold">
+                    MCA v3 cross-ref · Shell threshold: &lt;1L cap + &lt;2yr lifecycle · Deterministic · <span className="underline underline-offset-2">No LLM</span>
+                </p>
             </div>
 
             <style dangerouslySetInnerHTML={{
