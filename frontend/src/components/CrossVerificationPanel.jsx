@@ -1,17 +1,19 @@
 import { ShieldCheck, ShieldAlert, ShieldQuestion, AlertTriangle, CheckCircle, XCircle, HelpCircle, ChevronDown, ArrowRightLeft, TrendingDown, TrendingUp } from 'lucide-react'
+import NetworkAnalysis from './NetworkAnalysis'
+import SupplyChainRiskPanel from './SupplyChainRiskPanel'
 
 const STATUS_CONFIG = {
-    MATCH:          { label: 'VERIFIED',      color: 'text-green',  bg: 'bg-green/10', border: 'border-green',  icon: CheckCircle },
-    MISMATCH:       { label: 'CONTRADICTED',  color: 'text-red',    bg: 'bg-red/10',   border: 'border-red',    icon: XCircle },
-    PARTIAL_MATCH:  { label: 'PARTIAL',       color: 'text-yellow', bg: 'bg-yellow/10', border: 'border-yellow', icon: AlertTriangle },
-    UNVERIFIABLE:   { label: 'UNVERIFIABLE',  color: 'text-muted',  bg: 'bg-muted/10',  border: 'border-border', icon: HelpCircle },
+    MATCH: { label: 'VERIFIED', color: 'text-green', bg: 'bg-green/10', border: 'border-green', icon: CheckCircle },
+    MISMATCH: { label: 'CONTRADICTED', color: 'text-red', bg: 'bg-red/10', border: 'border-red', icon: XCircle },
+    PARTIAL_MATCH: { label: 'PARTIAL', color: 'text-yellow', bg: 'bg-yellow/10', border: 'border-yellow', icon: AlertTriangle },
+    UNVERIFIABLE: { label: 'UNVERIFIABLE', color: 'text-muted', bg: 'bg-muted/10', border: 'border-border', icon: HelpCircle },
 }
 
 const SEVERITY_CONFIG = {
-    HIGH:   { label: 'HIGH',   color: 'text-red',    bg: 'bg-red/10' },
+    HIGH: { label: 'HIGH', color: 'text-red', bg: 'bg-red/10' },
     MEDIUM: { label: 'MEDIUM', color: 'text-yellow', bg: 'bg-yellow/10' },
-    LOW:    { label: 'LOW',    color: 'text-muted',  bg: 'bg-muted/5' },
-    INFO:   { label: 'INFO',   color: 'text-ink',    bg: 'bg-paper' },
+    LOW: { label: 'LOW', color: 'text-muted', bg: 'bg-muted/5' },
+    INFO: { label: 'INFO', color: 'text-ink', bg: 'bg-paper' },
 }
 
 function StatusBadge({ status }) {
@@ -189,7 +191,7 @@ function GstReconciliationCard({ verification }) {
     )
 }
 
-export default function CrossVerificationPanel({ data, claims }) {
+export default function CrossVerificationPanel({ data, claims, supplyChainData, networkData }) {
     if (!data || !data.verifications || data.verifications.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center p-10 bg-paper border-[3px] border-ink">
@@ -299,6 +301,38 @@ export default function CrossVerificationPanel({ data, claims }) {
                     </div>
                 </details>
             ))}
+
+            {/* ── SUPPLY CHAIN RISK ────────────────────────────────────────── */}
+            {supplyChainData && (
+                <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                    <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                        <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                            <div className="w-2 h-2 bg-ink" />
+                            Supply Chain Risk
+                        </div>
+                        <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="p-5">
+                        <SupplyChainRiskPanel data={supplyChainData} />
+                    </div>
+                </details>
+            )}
+
+            {/* ── NETWORK ANALYSIS ─────────────────────────────────────────── */}
+            {networkData && (
+                <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                    <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                        <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                            <div className="w-2 h-2 bg-ink" />
+                            Network Analysis
+                        </div>
+                        <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="p-5">
+                        <NetworkAnalysis data={networkData} />
+                    </div>
+                </details>
+            )}
 
             {/* ── METHODOLOGY NOTE ─────────────────────────────────────────── */}
             <div className="border-2 border-border bg-paper p-4">

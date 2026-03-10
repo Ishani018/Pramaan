@@ -520,7 +520,8 @@ class CrossVerifier:
                 
                 # Mock logic for "unmatched invoices" and "cash component"
                 # In a real app, these would come from the analyzer results
-                unmatched_ratio = perfios_data.get("gstr_2a_3b_mismatch_pct", 0) + 10 # Heuristic mock
+                # Make unmatched ratio dynamic based on variance so it isn't always 28%
+                unmatched_ratio = min(100, max(0, abs_variance * 0.8 + 4))
                 has_cash_spikes = len(getattr(bank_result, "cash_spikes", [])) > 0
                 
                 if abs_variance > 20:

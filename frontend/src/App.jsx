@@ -412,6 +412,11 @@ export default function App() {
                 restatement_data: pdfResult?.restatement_data,
                 news_data: pdfResult?.news,
                 site_visit_scan: pdfResult?.site_visit_scan,
+                cross_verification: pdfResult?.cross_verification,
+                bank_statement: pdfResult?.bank_statement,
+                counterparty_intel: pdfResult?.counterparty_intel,
+                benchmark_data: pdfResult?.benchmark_data,
+                network_data: networkData,
             }
             const resp = await axios.post('/api/v1/export-cam', payload, {
                 responseType: 'blob',
@@ -923,26 +928,13 @@ export default function App() {
 
                                 {/* ── TAB 3: VERIFY ───────────────────────────────── */}
                                 {activeTab === 'cross-verify' && (
-                                    <CrossVerificationPanel data={pdfResult?.cross_verification} claims={pdfResult?.claims} />
+                                    <CrossVerificationPanel data={pdfResult?.cross_verification} claims={pdfResult?.claims} supplyChainData={pdfResult?.supply_chain_risk} networkData={networkData} />
                                 )}
 
                                 {/* ── TAB 4: INTELLIGENCE ─────────────────────────── */}
                                 {activeTab === 'intelligence' && (
                                     <div className="flex flex-col gap-4">
                                         <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
-                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
-                                                    Network Analysis
-                                                </div>
-                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
-                                            </summary>
-                                            <div className="p-5">
-                                                <NetworkAnalysis data={networkData} />
-                                            </div>
-                                        </details>
-
-                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
                                                     <div className="w-2 h-2 bg-ink" />
@@ -1026,19 +1018,6 @@ export default function App() {
                                 {/* ── TAB 5: FINANCIALS ─────────────────────────────── */}
                                 {activeTab === 'financials' && (
                                     <div className="flex flex-col gap-4">
-                                        <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-                                            <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
-                                                <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
-                                                    Supply Chain Risk
-                                                </div>
-                                                <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
-                                            </summary>
-                                            <div className="p-5">
-                                                <SupplyChainRiskPanel data={pdfResult?.supply_chain_risk} />
-                                            </div>
-                                        </details>
-
                                         <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">

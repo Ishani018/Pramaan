@@ -53,6 +53,11 @@ class CamRequest(BaseModel):
     site_visit_scan: Optional[Dict[str, Any]] = None
     mca_data:   Optional[Dict[str, Any]] = None
     triggered_rules: list[str]           = []
+    cross_verification: Optional[Dict[str, Any]] = None
+    bank_statement: Optional[Dict[str, Any]] = None
+    counterparty_intel: Optional[Dict[str, Any]] = None
+    benchmark_data: Optional[Dict[str, Any]] = None
+    network_data: Optional[Dict[str, Any]] = None
 
     # Capital / Collateral (optional free-text from officer)
     net_worth:          Optional[str] = None

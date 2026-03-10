@@ -42,20 +42,30 @@ export default function SupplyChainRiskPanel({ data }) {
 
                 <div className="border-2 border-border p-3">
                     <div className="text-xs font-mono font-bold text-muted uppercase">Supplier Side</div>
-                    <div className="mt-1 font-mono text-sm text-ink">
+                    <div className="mt-1 font-mono text-sm text-ink mb-1">
                         {data.supplier_risk_band} ({data.supplier_risk_score})
                     </div>
+                    {data.major_supplier && (
+                        <div className="text-[10px] font-mono text-muted uppercase truncate" title={data.major_supplier}>
+                            <span className="font-bold">Entity:</span> {data.major_supplier}
+                        </div>
+                    )}
                 </div>
 
                 <div className="border-2 border-border p-3">
                     <div className="text-xs font-mono font-bold text-muted uppercase">Buyer Side</div>
-                    <div className="mt-1 font-mono text-sm text-ink">
+                    <div className="mt-1 font-mono text-sm text-ink mb-1">
                         {data.buyer_risk_band} ({data.buyer_risk_score})
                     </div>
+                    {data.major_buyer && (
+                        <div className="text-[10px] font-mono text-muted uppercase truncate" title={data.major_buyer}>
+                            <span className="font-bold">Entity:</span> {data.major_buyer}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div className="mt-4 border-2 border-border p-4 bg-[#F8F9FA]">
+            <div className="mt-4 border-2 border-border p-4 bg-paper-raised">
                 <div className="flex items-start gap-2">
                     <AlertTriangle size={16} className="text-red mt-0.5" />
                     <div>
