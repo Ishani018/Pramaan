@@ -68,7 +68,7 @@ async def mock_perfios():
         "gst_filing_discipline_score": 83.3,
         "itc_reversal_required": True,
         "itc_reversal_amount_lakh": 12.4,
-        "gst_turnover_cr": 105.2,
+        "gst_turnover_cr": 0.58,      # ~₹0.58 Cr — aligns with sample CSVs (~₹0.48 Cr credits)
         "annual_gst_liability_lakh": 102.6,
         "annual_itc_claimed_lakh": 80.2,
 

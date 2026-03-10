@@ -505,11 +505,14 @@ class CrossVerifier:
 
     def _verify_gst_bank_reconciliation(self, perfios_data, bank_result):
         checks = []
-        
-        # We perform one composite check for reconciliation
-        if perfios_data and perfios_data.get("status") == "success" and bank_result:
+
+        # Guard: bank_result must have real data (total_transactions > 0)
+        has_bank = bank_result and getattr(bank_result, "total_transactions", 0) > 0
+        has_gst = perfios_data and perfios_data.get("status") == "success"
+
+        if has_gst and has_bank:
             gst_turnover = perfios_data.get("gst_turnover_cr", 0)
-            bank_credits = getattr(bank_result, "total_credits", 0) / 1_00_00_000 # To Cr
+            bank_credits = getattr(bank_result, "total_credits", 0) / 1_00_00_000  # To Cr
             
             if gst_turnover > 0:
                 variance = ((bank_credits - gst_turnover) / gst_turnover) * 100
@@ -546,11 +549,25 @@ class CrossVerifier:
                 checks.append(self._check("Reconciliation Engine", "gst", finding, status, severity, detail))
             else:
                 checks.append(self._check("Reconciliation Engine", "gst", "GST turnover not found", UNVERIFIABLE, LOW, "Cannot perform reconciliation without GST turnover data."))
+        elif has_gst and not has_bank:
+            checks.append(self._check(
+                "Reconciliation Engine", "gst",
+                "Bank statement not uploaded",
+                UNVERIFIABLE, LOW,
+                "Upload a bank statement CSV to reconcile GST turnover against actual bank credits."
+            ))
+        elif has_bank and not has_gst:
+            checks.append(self._check(
+                "Reconciliation Engine", "gst",
+                "GST data unavailable",
+                UNVERIFIABLE, LOW,
+                "GST/Perfios data is required alongside the bank statement to run reconciliation."
+            ))
         else:
             checks.append(self._check(
-                "Reconciliation Engine", "gst", 
-                "GST or Bank data missing", 
-                UNVERIFIABLE, LOW, 
+                "Reconciliation Engine", "gst",
+                "GST and Bank data missing",
+                UNVERIFIABLE, LOW,
                 "Upload a bank statement and ensure GST data is available to run reconciliation."
             ))
 

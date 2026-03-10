@@ -1,4 +1,4 @@
-import { ShieldCheck, ShieldAlert, ShieldQuestion, AlertTriangle, CheckCircle, XCircle, HelpCircle, ChevronDown } from 'lucide-react'
+import { ShieldCheck, ShieldAlert, ShieldQuestion, AlertTriangle, CheckCircle, XCircle, HelpCircle, ChevronDown, ArrowRightLeft, TrendingDown, TrendingUp } from 'lucide-react'
 
 const STATUS_CONFIG = {
     MATCH:          { label: 'VERIFIED',      color: 'text-green',  bg: 'bg-green/10', border: 'border-green',  icon: CheckCircle },
@@ -42,6 +42,153 @@ function SourceLabel({ name }) {
     )
 }
 
+// ── Parse GST numbers from finding string ────────────────────────────────
+function parseGstFinding(finding) {
+    const gstMatch = finding.match(/GST Turnover:\s*₹([\d,.]+)\s*Cr/)
+    const bankMatch = finding.match(/Bank Credits:\s*₹([\d,.]+)\s*Cr/)
+    const varMatch = finding.match(/Variance:\s*([+-]?\d+)%/)
+    return {
+        gstTurnover: gstMatch ? parseFloat(gstMatch[1].replace(/,/g, '')) : null,
+        bankCredits: bankMatch ? parseFloat(bankMatch[1].replace(/,/g, '')) : null,
+        variance: varMatch ? parseInt(varMatch[1]) : null,
+    }
+}
+
+// ── Parse observations from detail string ────────────────────────────────
+function parseGstDetail(detail) {
+    const lines = detail.split('\n').filter(l => l.trim())
+    const observations = lines.filter(l => l.startsWith('•')).map(l => l.replace('• ', ''))
+    const conclusionIdx = lines.findIndex(l => l.startsWith('Conclusion:'))
+    const conclusion = conclusionIdx >= 0 ? lines.slice(conclusionIdx + 1).join(' ').trim() : ''
+    return { observations, conclusion }
+}
+
+// ── GST Reconciliation Hero Card ─────────────────────────────────────────
+function GstReconciliationCard({ verification }) {
+    const check = verification.checks[0]
+    if (!check) return null
+
+    const { gstTurnover, bankCredits, variance } = parseGstFinding(check.finding)
+    const { observations, conclusion } = parseGstDetail(check.detail || '')
+    const status = check.status
+    const isUnverifiable = status === 'UNVERIFIABLE'
+
+    // Color scheme based on status
+    const accent = status === 'MISMATCH' ? 'red' : status === 'PARTIAL_MATCH' ? 'yellow' : status === 'MATCH' ? 'green' : 'muted'
+    const borderClass = `border-${accent}`
+    const bgClass = `bg-${accent}/5`
+    const textClass = `text-${accent}`
+
+    // Variance bar width (capped at 50% for display, centered at 50%)
+    const absVar = Math.min(Math.abs(variance || 0), 50)
+    const barWidth = Math.max(absVar * 2, 4) // min 4% width for visibility
+
+    if (isUnverifiable) {
+        return (
+            <div className="border-[3px] border-border bg-paper p-5 relative">
+                <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-muted uppercase tracking-wider text-sm flex items-center gap-2">
+                    <ArrowRightLeft size={14} />
+                    GST-BANK RECONCILIATION
+                </div>
+                <div className="flex items-center gap-3 mt-2">
+                    <HelpCircle size={20} className="text-muted" />
+                    <p className="text-sm font-serif text-muted">{check.finding}</p>
+                </div>
+                <p className="text-xs font-serif text-muted mt-2">{check.detail}</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className={`border-[3px] ${borderClass} ${bgClass} p-5 relative`}>
+            {/* Title badge */}
+            <div className={`absolute -top-3 left-4 ${bgClass} bg-paper px-2 font-display font-black uppercase tracking-wider text-sm flex items-center gap-2 ${textClass}`}>
+                <ArrowRightLeft size={14} />
+                GST-BANK RECONCILIATION
+                <StatusBadge status={status} />
+            </div>
+
+            {/* Big numbers row */}
+            <div className="grid grid-cols-3 gap-3 mt-3">
+                {/* GST Turnover */}
+                <div className="border-2 border-ink/20 bg-paper p-3 text-center">
+                    <div className="text-[10px] font-mono font-bold text-muted uppercase mb-1">GST Turnover</div>
+                    <div className="text-xl font-mono font-black text-ink">
+                        {gstTurnover !== null ? `₹${gstTurnover.toFixed(1)}` : '—'}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted">Cr</div>
+                </div>
+
+                {/* Variance — center with visual indicator */}
+                <div className={`border-2 ${borderClass} bg-paper p-3 text-center flex flex-col items-center justify-center`}>
+                    <div className="text-[10px] font-mono font-bold text-muted uppercase mb-1">Variance</div>
+                    <div className={`text-2xl font-mono font-black ${textClass} flex items-center gap-1`}>
+                        {variance !== null ? (
+                            <>
+                                {variance > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                                {variance > 0 ? '+' : ''}{variance}%
+                            </>
+                        ) : '—'}
+                    </div>
+                    {/* Variance bar */}
+                    {variance !== null && (
+                        <div className="w-full h-1.5 bg-ink/10 mt-2 relative">
+                            <div className="absolute top-0 left-1/2 w-px h-full bg-ink/30" />
+                            <div
+                                className={`absolute top-0 h-full bg-${accent}`}
+                                style={{
+                                    left: variance < 0 ? `${50 - barWidth / 2}%` : '50%',
+                                    width: `${barWidth / 2}%`,
+                                }}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Bank Credits */}
+                <div className="border-2 border-ink/20 bg-paper p-3 text-center">
+                    <div className="text-[10px] font-mono font-bold text-muted uppercase mb-1">Bank Credits</div>
+                    <div className="text-xl font-mono font-black text-ink">
+                        {bankCredits !== null ? `₹${bankCredits.toFixed(1)}` : '—'}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted">Cr</div>
+                </div>
+            </div>
+
+            {/* Observations + Conclusion */}
+            {(observations.length > 0 || conclusion) && (
+                <div className="mt-3 border-t-2 border-ink/10 pt-3">
+                    {observations.length > 0 && (
+                        <div className="flex flex-col gap-1 mb-2">
+                            {observations.map((obs, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                    <div className={`w-1 h-1 mt-1.5 bg-${accent} shrink-0`} />
+                                    <span className="text-xs font-mono text-ink">{obs}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {conclusion && (
+                        <p className={`text-xs font-serif font-bold ${textClass} border-l-2 ${borderClass} pl-2`}>
+                            {conclusion}
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Rule tag if P-33 */}
+            {status === 'MISMATCH' && (
+                <div className="mt-3 flex items-center gap-2">
+                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold text-red border border-red bg-red/10">
+                        P-33: RECON-01
+                    </span>
+                    <span className="text-[10px] font-mono text-muted">GST-Bank Turnover Mismatch — Rate penalty 125bps, Limit -20%</span>
+                </div>
+            )}
+        </div>
+    )
+}
+
 export default function CrossVerificationPanel({ data, claims }) {
     if (!data || !data.verifications || data.verifications.length === 0) {
         return (
@@ -55,6 +202,10 @@ export default function CrossVerificationPanel({ data, claims }) {
     }
 
     const { verifications, summary = {}, triggered_rules = [] } = data
+
+    // Separate GST reconciliation from other verifications
+    const gstVerification = verifications.find(v => v.claim_id === 'gst_bank_reconciliation')
+    const otherVerifications = verifications.filter(v => v.claim_id !== 'gst_bank_reconciliation')
 
     return (
         <div className="flex flex-col gap-6">
@@ -100,8 +251,11 @@ export default function CrossVerificationPanel({ data, claims }) {
                 )}
             </div>
 
+            {/* ── GST RECONCILIATION HERO CARD ─────────────────────────────── */}
+            {gstVerification && <GstReconciliationCard verification={gstVerification} />}
+
             {/* ── VERIFICATION CARDS ───────────────────────────────────────── */}
-            {verifications.map((v) => (
+            {otherVerifications.map((v) => (
                 <details key={v.claim_id} className="group border-[3px] border-ink bg-paper relative" open={v.overall_status === 'MISMATCH'}>
                     <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
