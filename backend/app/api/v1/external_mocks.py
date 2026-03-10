@@ -416,3 +416,134 @@ async def mock_news():
         "triggered_rules": ["P-13"],
         "source": "NewsAPI (mock)",
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# AUDITOR BLACKLIST — Institutional Memory Check
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Simulated institutional blacklist database — in production this would be a
+# persistent database maintained by the bank's risk/compliance team.
+AUDITOR_BLACKLIST_DB = {
+    # Firm name (uppercased for matching) → blacklist record
+    "GUPTA SHARMA & ASSOCIATES": {
+        "firm_name": "Gupta Sharma & Associates",
+        "frn": "012345S",
+        "blacklisted_by": ["Internal — Credit Risk", "NFRA"],
+        "reason": "Failed to flag related party transactions in 3 consecutive audits; NFRA order dated 14-Sep-2023 for professional misconduct",
+        "blacklisted_since": "2023-10-01",
+        "severity": "HIGH",
+        "nfra_order": "NFRA/DO/2023/0047",
+        "prior_incidents": 2,
+    },
+    "RAJESH KUMAR & CO": {
+        "firm_name": "Rajesh Kumar & Co",
+        "frn": "008761N",
+        "blacklisted_by": ["RBI Circular", "Internal — Fraud Investigation"],
+        "reason": "Audit firm involved in IL&FS subsidiary audits; RBI flagged for inadequate verification of NPA classification",
+        "blacklisted_since": "2022-03-15",
+        "severity": "CRITICAL",
+        "nfra_order": None,
+        "prior_incidents": 5,
+    },
+    "PKR & ASSOCIATES": {
+        "firm_name": "PKR & Associates",
+        "frn": "015432W",
+        "blacklisted_by": ["ICAI Disciplinary Committee"],
+        "reason": "ICAI disciplinary action for issuing clean audit report despite known going concern issues; suspended from practice for 6 months",
+        "blacklisted_since": "2024-01-20",
+        "severity": "MEDIUM",
+        "nfra_order": None,
+        "prior_incidents": 1,
+    },
+    "MAXWELL PATEL LLP": {
+        "firm_name": "Maxwell Patel LLP",
+        "frn": "119876W/W100234",
+        "blacklisted_by": ["Internal — Watchlist"],
+        "reason": "Under monitoring — audited 3 accounts that subsequently turned NPA within 12 months of clean audit opinion",
+        "blacklisted_since": "2024-06-01",
+        "severity": "LOW",
+        "nfra_order": None,
+        "prior_incidents": 0,
+    },
+}
+
+# Firms on the watchlist (not blacklisted but flagged for enhanced due diligence)
+AUDITOR_WATCHLIST_DB = {
+    "SR BATLIBOI & CO LLP": {
+        "firm_name": "SR Batliboi & Co LLP",
+        "frn": "301003E/E300005",
+        "reason": "Large firm — no adverse findings, but NFRA inspection pending for FY24 audits",
+        "watch_since": "2024-09-01",
+        "severity": "INFO",
+    },
+}
+
+
+def check_auditor_blacklist(auditor_name: str) -> dict:
+    """
+    Check an auditor firm name against the institutional blacklist and watchlist.
+    Returns a screening result dict.
+    """
+    if not auditor_name:
+        return {
+            "status": "NOT_CHECKED",
+            "auditor_name": None,
+            "message": "No auditor name extracted from annual report",
+            "blacklisted": False,
+            "watchlisted": False,
+            "records": [],
+        }
+
+    name_upper = auditor_name.strip().upper()
+
+    # Check blacklist (fuzzy: check if any blacklist key is contained in name or vice versa)
+    matched_records = []
+    for bl_key, bl_record in AUDITOR_BLACKLIST_DB.items():
+        if bl_key in name_upper or name_upper in bl_key:
+            matched_records.append({**bl_record, "list_type": "BLACKLISTED"})
+
+    for wl_key, wl_record in AUDITOR_WATCHLIST_DB.items():
+        if wl_key in name_upper or name_upper in wl_key:
+            matched_records.append({**wl_record, "list_type": "WATCHLIST"})
+
+    is_blacklisted = any(r["list_type"] == "BLACKLISTED" for r in matched_records)
+    is_watchlisted = any(r["list_type"] == "WATCHLIST" for r in matched_records)
+
+    if is_blacklisted:
+        status = "BLACKLISTED"
+        message = f"ALERT: {auditor_name} appears on institutional blacklist"
+    elif is_watchlisted:
+        status = "WATCHLIST"
+        message = f"NOTICE: {auditor_name} is on enhanced monitoring watchlist"
+    else:
+        status = "CLEAR"
+        message = f"{auditor_name} — no adverse records found in institutional memory"
+
+    return {
+        "status": status,
+        "auditor_name": auditor_name,
+        "message": message,
+        "blacklisted": is_blacklisted,
+        "watchlisted": is_watchlisted,
+        "records": matched_records,
+        "total_firms_in_blacklist": len(AUDITOR_BLACKLIST_DB),
+        "total_firms_in_watchlist": len(AUDITOR_WATCHLIST_DB),
+        "database_last_updated": "2024-12-15",
+        "source": "Pramaan Institutional Memory (mock)",
+    }
+
+
+@router.get(
+    "/auditor-blacklist",
+    summary="Auditor Blacklist – Institutional Memory Check",
+    description=(
+        "Checks the statutory auditor against the bank's institutional blacklist database. "
+        "Sources: Internal fraud investigations, NFRA orders, ICAI disciplinary actions, "
+        "RBI circulars, and internal watchlist. Returns screening status: "
+        "CLEAR / WATCHLIST / BLACKLISTED."
+    ),
+)
+async def mock_auditor_blacklist(auditor_name: str = ""):
+    """Mock endpoint — in production, queries persistent institutional memory DB."""
+    return check_auditor_blacklist(auditor_name)

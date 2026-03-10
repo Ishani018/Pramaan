@@ -163,12 +163,12 @@ function CircularFlowSVG({ loop }) {
                 {/* Animated Flow Track — compact */}
                 <div className="flex-1 h-16 relative flex items-center min-w-0">
                     <svg className="w-full h-full overflow-visible" viewBox="0 0 200 60" preserveAspectRatio="none">
-                        <path d="M 10 18 Q 100 -8 190 18" fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" className="animate-flow-dash" />
+                        <path d="M 10 18 Q 100 -8 190 18" fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" />
                         <text x="100" y="8" textAnchor="middle" className="fill-red font-mono" style={{ fontSize: '9px', fontWeight: 700 }}>{debitAmt}</text>
                         <path d="M 190 42 Q 100 68 10 42" fill="none" stroke="#ef4444" strokeWidth="2" className="opacity-50" />
                         <text x="100" y="58" textAnchor="middle" className="fill-red font-mono" style={{ fontSize: '9px', fontWeight: 700 }}>{creditAmt}</text>
-                        <circle r="2.5" fill="#ef4444"><animateMotion dur="2s" repeatCount="indefinite" path="M 10 18 Q 100 -8 190 18" /></circle>
-                        <circle r="2.5" fill="#ef4444"><animateMotion dur="2.5s" repeatCount="indefinite" path="M 190 42 Q 100 68 10 42" /></circle>
+                        <circle r="2.5" fill="#ef4444" cx="100" cy="10" />
+                        <circle r="2.5" fill="#ef4444" cx="100" cy="50" />
                     </svg>
                 </div>
 
@@ -249,7 +249,7 @@ export default function NetworkAnalysis({ data }) {
                     </div>
                     <div className="group">
                         <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Shell Suspects</div>
-                        <div className={`text-2xl font-mono font-black ${shellCount > 0 ? 'text-red animate-pulse' : 'text-green opacity-40'}`}>{shellCount}</div>
+                        <div className={`text-2xl font-mono font-black ${shellCount > 0 ? 'text-red' : 'text-green opacity-40'}`}>{shellCount}</div>
                     </div>
                     <div className="group">
                         <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Risk Flags</div>
@@ -372,16 +372,6 @@ export default function NetworkAnalysis({ data }) {
                 </p>
             </div>
 
-            <style dangerouslySetInnerHTML={{
-                __html: `
-                @keyframes flow-dash {
-                    to { stroke-dashoffset: -20; }
-                }
-                .animate-flow-dash {
-                    stroke-dasharray: 5 5;
-                    animation: flow-dash 1s linear infinite;
-                }
-            `}} />
         </div>
     )
 }

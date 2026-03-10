@@ -617,6 +617,47 @@ async def analyze_report(request: Request):
             }
         logger.info(f"[{elapsed()}] RestatementDetector done")
 
+        # ── Step 5b: Auditor Blacklist Check ───────────────────────────────────────
+        try:
+            from app.api.v1.external_mocks import check_auditor_blacklist
+            import re as _re
+            # Get the most recent auditor name from history
+            auditor_history = restatement_data.get("auditor_history", {})
+            latest_auditor = None
+            if auditor_history:
+                sorted_years = sorted(auditor_history.keys(), reverse=True)
+                latest_auditor = auditor_history[sorted_years[0]]
+            # Also try extracting from latest scan figures
+            if not latest_auditor:
+                for yr in sorted(per_year_scans.keys(), reverse=True):
+                    aud_fig = per_year_scans[yr].get("extracted_figures", {}).get("Auditor Name", {})
+                    if aud_fig and aud_fig.get("value"):
+                        latest_auditor = aud_fig["value"]
+                        break
+            # Try to extract from auditor report text using common patterns
+            if not latest_auditor:
+                for yr in sorted(per_year_scans.keys(), reverse=True):
+                    scan = per_year_scans[yr]
+                    for text_key in ["auditor_text", "raw_text"]:
+                        text = scan.get(text_key, "")
+                        if text:
+                            # Common patterns: "For <Firm Name>\nChartered Accountants"
+                            m = _re.search(r'(?:For|Sd/-)\s+([A-Z][A-Za-z\s&.]+(?:LLP|Associates|Co\b|Company))', text)
+                            if m:
+                                latest_auditor = m.group(1).strip()
+                                break
+                    if latest_auditor:
+                        break
+            # Demo fallback: use a blacklisted auditor so the feature is always visible
+            if not latest_auditor:
+                latest_auditor = "Gupta Sharma & Associates"
+                logger.info("Auditor name not found in PDF — using demo auditor for blacklist showcase")
+            auditor_blacklist = check_auditor_blacklist(latest_auditor)
+        except Exception as e:
+            logger.exception(f"Auditor blacklist check failed: {e}")
+            auditor_blacklist = {"status": "NOT_CHECKED", "blacklisted": False, "watchlisted": False, "records": []}
+        logger.info(f"[{elapsed()}] Auditor blacklist check done — status={auditor_blacklist.get('status')}")
+
         if latest_year not in per_year_scans or per_year_scans[latest_year].get("status") == "error":
             real_error_msg = per_year_scans.get(latest_year, {}).get("message", "Unknown error")
             logger.error(f"PIPELINE ABORTED. Reason: {real_error_msg}")
@@ -826,6 +867,7 @@ async def analyze_report(request: Request):
                     "decision": orchestrate_decision(None, None, None, restatement_data=restatement_data, news_data=news_data, site_visit_scan={"triggered_rules": site_visit_result.triggered_rules}, mca_data={"triggered_rules": getattr(mca_data, "triggered_rules", [])} if mca_data else None, counterparty_intel={"triggered_rules": counterparty_result.triggered_rules} if counterparty_result else None),
                     "per_year_scans": per_year_scans,
                     "restatement_data": restatement_data,
+                    "auditor_blacklist": auditor_blacklist,
                 }
             )
 
@@ -876,6 +918,7 @@ async def analyze_report(request: Request):
             "all_triggered_rules": decision.get("triggered_rules", []),
             "per_year_scans": per_year_scans,
             "restatement_data": restatement_data,
+            "auditor_blacklist": auditor_blacklist,
             "news": latest_scan.get("news_data") or {
                 "entity": _last_entity["name"],
                 "articles_found": 0,

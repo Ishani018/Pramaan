@@ -169,7 +169,7 @@ const ALL_RULES = [
 function StatusBadge({ status, message }) {
     const styles = {
         idle: { color: 'text-muted', text: '[IDLE]' },
-        loading: { color: 'text-red font-bold animate-pulse', text: '[ACTIVE]' },
+        loading: { color: 'text-red font-bold opacity-90', text: '[ACTIVE]' },
         success: { color: 'text-ink font-bold', text: '[READY]' },
         error: { color: 'text-red font-bold', text: `[ERROR: ${message}]` },
     }
@@ -553,7 +553,7 @@ export default function App() {
                     </button>
 
                     {loading && (
-                        <div className="mt-2 text-center text-xs font-mono text-ink animate-pulse">
+                        <div className="mt-2 text-center text-xs font-mono text-ink opacity-90">
                             {PROGRESS_STEPS[progressStepIdx]?.msg || "PROCESSING..."}
                         </div>
                     )}
@@ -644,7 +644,7 @@ export default function App() {
                                 </span>
                                 {loading ? (
                                     <div className="flex items-center gap-2 text-xs font-mono font-bold text-red uppercase">
-                                        <span className="w-2 h-2 rounded-none bg-red animate-pulse" />
+                                        <span className="w-2 h-2 rounded-none bg-red opacity-90" />
                                         Analysing
                                     </div>
                                 ) : (
@@ -927,6 +927,107 @@ export default function App() {
                                             </div>
                                         </details>
 
+                                        {/* Auditor Blacklist */}
+                                        {pdfResult?.auditor_blacklist && (
+                                            <details open={pdfResult.auditor_blacklist.blacklisted || pdfResult.auditor_blacklist.watchlisted} className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                                <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
+                                                    <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
+                                                        <Shield size={14} className={pdfResult.auditor_blacklist.blacklisted ? 'text-red' : pdfResult.auditor_blacklist.watchlisted ? 'text-yellow' : 'text-green'} />
+                                                        Auditor Blacklist
+                                                        {pdfResult.auditor_blacklist.blacklisted && (
+                                                            <span className="px-2 py-0.5 text-[10px] font-mono font-bold text-red border border-red bg-red/10 opacity-90">BLACKLISTED</span>
+                                                        )}
+                                                        {pdfResult.auditor_blacklist.watchlisted && !pdfResult.auditor_blacklist.blacklisted && (
+                                                            <span className="px-2 py-0.5 text-[10px] font-mono font-bold text-yellow border border-yellow bg-yellow/10">WATCHLIST</span>
+                                                        )}
+                                                        {!pdfResult.auditor_blacklist.blacklisted && !pdfResult.auditor_blacklist.watchlisted && pdfResult.auditor_blacklist.status !== 'NOT_CHECKED' && (
+                                                            <span className="px-2 py-0.5 text-[10px] font-mono font-bold text-green border border-green bg-green/10">CLEAR</span>
+                                                        )}
+                                                    </div>
+                                                    <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
+                                                </summary>
+                                                <div className="p-5">
+                                                    {(() => {
+                                                        const ab = pdfResult.auditor_blacklist;
+                                                        return (
+                                                            <div className="flex flex-col gap-4">
+                                                                {/* Auditor name + status */}
+                                                                <div className={`border-2 p-4 ${ab.blacklisted ? 'border-red bg-red/5' : ab.watchlisted ? 'border-yellow bg-yellow/5' : 'border-green bg-green/5'}`}>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div>
+                                                                            <div className="text-[10px] font-mono font-bold text-muted uppercase mb-1">STATUTORY AUDITOR</div>
+                                                                            <div className="text-base font-mono font-black text-ink">
+                                                                                {ab.auditor_name || 'Not extracted'}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className={`px-3 py-1.5 border-[3px] font-mono font-bold uppercase text-sm ${
+                                                                            ab.blacklisted ? 'border-red text-red' :
+                                                                            ab.watchlisted ? 'border-yellow text-yellow' :
+                                                                            ab.status === 'NOT_CHECKED' ? 'border-border text-muted' :
+                                                                            'border-green text-green'
+                                                                        }`}>
+                                                                            {ab.status}
+                                                                        </div>
+                                                                    </div>
+                                                                    <p className="text-xs font-serif text-ink mt-2">{ab.message}</p>
+                                                                </div>
+
+                                                                {/* Records */}
+                                                                {ab.records && ab.records.length > 0 && (
+                                                                    <div className="flex flex-col gap-3">
+                                                                        <div className="text-[10px] font-mono font-bold text-muted uppercase">INSTITUTIONAL MEMORY RECORDS</div>
+                                                                        {ab.records.map((rec, idx) => (
+                                                                            <div key={idx} className={`border-2 p-4 relative ${rec.list_type === 'BLACKLISTED' ? 'border-red' : 'border-yellow'}`}>
+                                                                                <div className="absolute -top-2 left-3 bg-paper px-2">
+                                                                                    <span className={`text-[9px] font-mono font-bold uppercase ${rec.list_type === 'BLACKLISTED' ? 'text-red' : 'text-yellow'}`}>
+                                                                                        {rec.list_type} — {rec.severity}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="mt-1 flex flex-col gap-2">
+                                                                                    <div className="flex items-center gap-3 flex-wrap">
+                                                                                        <span className="text-xs font-mono font-bold text-ink">{rec.firm_name}</span>
+                                                                                        {rec.frn && <span className="text-[10px] font-mono text-muted">FRN: {rec.frn}</span>}
+                                                                                    </div>
+                                                                                    <p className="text-xs font-serif text-ink leading-relaxed">{rec.reason}</p>
+                                                                                    <div className="flex items-center gap-4 flex-wrap">
+                                                                                        {rec.blacklisted_by && (
+                                                                                            <div className="flex items-center gap-1 flex-wrap">
+                                                                                                <span className="text-[9px] font-mono font-bold text-muted">BY:</span>
+                                                                                                {rec.blacklisted_by.map((src, i) => (
+                                                                                                    <span key={i} className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-ink/10 text-ink">{src}</span>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {rec.blacklisted_since && (
+                                                                                            <span className="text-[9px] font-mono text-muted">Since: {rec.blacklisted_since}</span>
+                                                                                        )}
+                                                                                        {rec.nfra_order && (
+                                                                                            <span className="text-[9px] font-mono text-red">NFRA: {rec.nfra_order}</span>
+                                                                                        )}
+                                                                                        {rec.prior_incidents > 0 && (
+                                                                                            <span className="text-[9px] font-mono text-red font-bold">{rec.prior_incidents} prior incident{rec.prior_incidents > 1 ? 's' : ''}</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Database stats */}
+                                                                <div className="flex items-center gap-4 text-[9px] font-mono text-muted uppercase border-t border-border pt-3">
+                                                                    <span>Blacklist: {ab.total_firms_in_blacklist || 0} firms</span>
+                                                                    <span>Watchlist: {ab.total_firms_in_watchlist || 0} firms</span>
+                                                                    <span>DB Updated: {ab.database_last_updated || 'N/A'}</span>
+                                                                    <span className="ml-auto">{ab.source}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </details>
+                                        )}
+
                                         {/* Bank Statement */}
                                         <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
@@ -1099,7 +1200,7 @@ export default function App() {
                                     let badgeStyle = hit ? 'bg-ink text-paper border-ink' : 'bg-paper text-ink border-border'
 
                                     if (hit && rule.severity === 'CRITICAL') {
-                                        badgeStyle = 'bg-red text-white border-red animate-pulse'
+                                        badgeStyle = 'bg-red text-white border-red opacity-90'
                                     } else if (hit && rule.severity === 'HIGH') {
                                         badgeStyle = 'bg-red text-white border-red'
                                     }
