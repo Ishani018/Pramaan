@@ -287,6 +287,10 @@ def generate_cam(data: Dict[str, Any]) -> bytes:
     mismatch = perfios.get("gstr_2a_3b_mismatch_pct", 0)
     _kv_row(c3_tbl, "GST 2A/3B Reconciliation", f"{mismatch:.1f}% Mismatch {'[GST-01]' if mismatch > 15 else ''}", DANGER_RED if mismatch > 15 else SUCCESS_GREEN)
     
+    disc_score = perfios.get("gst_filing_discipline_score")
+    if disc_score is not None:
+        _kv_row(c3_tbl, "GST Filing Discipline Score", f"{disc_score:.1f}/100", WARN_AMBER if disc_score < 90 else SUCCESS_GREEN)
+    
     cap = site_visit.get("capacity_utilisation_pct")
     _kv_row(c3_tbl, "Site Visit Capacity", f"{cap}% — BELOW THRESHOLD [PRIMARY-01]" if cap and cap < 60 else f"{cap}%" if cap else "No quantitative data", DANGER_RED if cap and cap < 60 else None)
     
