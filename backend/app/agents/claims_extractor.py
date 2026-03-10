@@ -31,7 +31,11 @@ def extract_claims(
     claims: Dict[str, Dict[str, Any]] = {}
 
     # ── Revenue claim ───────────────────────────────────────────────────────
-    revenue = extracted_figures.get("revenue") or extracted_figures.get("revenue_cr")
+    revenue = (
+        extracted_figures.get("Revenue", {}).get("value") or
+        extracted_figures.get("revenue") or 
+        extracted_figures.get("revenue_cr")
+    )
     if revenue and revenue > 0:
         claims["revenue"] = {
             "claim": f"Revenue from operations: {revenue:,.1f} Cr",
@@ -50,8 +54,17 @@ def extract_claims(
         }
 
     # ── Profitability claim ─────────────────────────────────────────────────
-    ebitda = extracted_figures.get("ebitda") or extracted_figures.get("ebitda_cr")
-    pat = extracted_figures.get("pat") or extracted_figures.get("net_profit") or extracted_figures.get("pat_cr")
+    ebitda = (
+        extracted_figures.get("EBITDA", {}).get("value") or 
+        extracted_figures.get("ebitda") or 
+        extracted_figures.get("ebitda_cr")
+    )
+    pat = (
+        extracted_figures.get("PAT", {}).get("value") or 
+        extracted_figures.get("pat") or 
+        extracted_figures.get("net_profit") or 
+        extracted_figures.get("pat_cr")
+    )
     if ebitda or pat:
         parts = []
         if ebitda:

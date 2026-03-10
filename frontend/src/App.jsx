@@ -219,8 +219,8 @@ function BureauCard({ icon: Icon, title, data, loading, color }) {
             </div>
             <div className="space-y-1">
                 {Object.entries(data)
-                    .filter(([k]) => !['status', 'provider', 'metadata', 'active_litigations'].includes(k))
-                    .slice(0, 4)
+                    .filter(([k]) => !['status', 'provider', 'metadata', 'active_litigations', 'entity', 'cin', 'gstin'].includes(k))
+                    .slice(0, 6)
                     .map(([k, v]) => (
                         <div key={k} className="flex justify-between text-xs">
                             <span className="text-ink capitalize font-serif">{k.replace(/_/g, ' ')}</span>
@@ -359,7 +359,7 @@ export default function App() {
             }
 
             if (pendingDecision.triggered_rules.length > 0) {
-                setTimeout(() => setActiveTab('waterfall'), 1100)
+                setTimeout(() => setActiveTab('decision'), 1100)
             }
         } catch (err) {
             const msg = err.response?.data?.detail || err.message || 'Unexpected error'

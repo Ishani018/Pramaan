@@ -249,6 +249,14 @@ RULE_DEFINITIONS = {
         "requires_manual_review": True,
         "description": "Annual report compliance claims contradicted by external bureau data",
     },
+    "P-33": {
+        "name": "RECON-01: GST-Bank Turnover Mismatch",
+        "severity": "HIGH",
+        "rate_penalty_bps": 125,
+        "limit_reduction_pct": 20,
+        "requires_manual_review": True,
+        "description": "High variance detected between GST turnover and bank statement credits",
+    },
 }
 
 
@@ -541,4 +549,6 @@ def _describe_finding(
 
     # Fallback: use the trigger_description from RULE_DEFINITIONS
     rule = RULE_DEFINITIONS.get(rule_id)
-    return rule["trigger_description"] if rule else "unknown trigger"
+    if not rule:
+        return "unknown trigger"
+    return rule.get("trigger_description") or rule.get("description") or rule.get("name", "unknown trigger")

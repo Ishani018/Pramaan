@@ -16,29 +16,35 @@ def detect_unit_and_normalize(value: float, context: str) -> tuple[float, str]:
     if any(x in ctx for x in ['lakh crore', 'lakh cr']):
         return round(value * 100000, 2), 'Lakh Cr'
     if re.search(r'\b(bn|billion)\b', ctx):
-        return round(value * 100, 2), 'Bn→Cr'
+        return round(value * 100, 2), 'Bn_Cr'
     if re.search(r'\b(crore|cr)\b', ctx):
         return round(value, 2), 'Cr'
     if re.search(r'\b(mn|million)\b', ctx):
-        return round(value / 100, 2), 'Mn→Cr'
+        return round(value / 100, 2), 'Mn_Cr'
     return round(value, 2), 'unknown'
 
 FIELD_PATTERNS = {
     "Revenue": {
         "patterns": [
             # Plain table: "Revenue from operations  1,223.16"
-            r'revenue\s+from\s+operations\s+\d*\s*([\d,]{4,}\.?\d{2})',
-            # Narrative: "Revenue stood at ₹ 435.7 billion"
-            r'revenue\s+stood\s+at\s+[`₹$]?\s*([\d,]+\.?\d*)\s*(bn|billion|cr|crore|mn|million)',
-            # Narrative: "total revenue of ₹ X Cr"  
-            r'total\s+revenue\s+(?:of|was|is|:)\s*[`₹$]?\s*([\d,]+\.?\d*)\s*(bn|billion|cr|crore|mn|million)',
-            # Income statement table line — 5+ digit number only
-            r'revenue\s+from\s+operations\s+(?:\d{1,3}\s+)?([\d,]{5,}\.?\d*)',
+            # Narrative: "Revenue from operations... was 1,223.16"
+            # Ensure we capture from the first digit and don't let \d* eat it.
+            # Also avoids common 4-digit years by requiring 5+ digits OR a decimal OR being followed by Cr/Mn/Bn
+            r'revenue\s+from\s+operations[\s\S]{0,100}?(?:of|was|at|is|:|Rs\.?|₹|€)?\s*([\d,]{5,}\.?\d*|[\d,]{1,}[.]\d+|[\d,]{1,}\s*(?:cr|crore|mn|million|bn|billion|lakh))',
+            # IND-AS variant
+            r'revenue\s+from\s+contracts\s+with\s+customers[\s\S]{0,100}?(?:of|was|at|is|:|Rs\.?|₹|€)?\s*([\d,]{5,}\.?\d*|[\d,]{1,}[.]\d+|[\d,]{1,}\s*(?:cr|crore|mn|million|bn|billion|lakh))',
+            # Generic Total Revenue/Income
+            r'total\s+(?:revenue|income)[\s\S]{0,100}?(?:of|was|at|is|:|Rs\.?|₹|€)?\s*([\d,]{5,}\.?\d*|[\d,]{1,}[.]\d+|[\d,]{1,}\s*(?:cr|crore|mn|million|bn|billion|lakh))',
+            # Narrative: "Revenue stood at ₹ 435.7 billion" or "revenue: Declined by 2.5% to €36.7 billion"
+            r'(?:total\s+)?revenue\s*(?:stood\s+at|is|was|of|:|)[\s\S]{0,50}?[`₹\$€]?\s*([\d,]+\.?\d*)\s*(bn|billion|cr|crore|mn|million)',
+            # Income statement table line — fallback (matches "Revenue 36,717")
+            r'revenue[\s]+([\d,]{5,}\.?\d*)',
+            r'total\s+revenue[\s]+([\d,]{4,}\.?\d*)',
         ],
         "exclude_patterns": [
             r'decreased\s+by',
             r'increased\s+by',
-            r'(?:decreased|increased|decline|growth)\s+(?:by\s+)?[`₹]?\s*[\d,]+',
+            r'(?:decreased|increased|decline|growth)\s+(?:by\s+)?[`₹€]?\s*[\d,]+',
             r'(\d+\.?\d*)\s*%',
         ]
     },
@@ -200,31 +206,5 @@ class FinancialExtractor:
         return results
 
     def _get_financial_section(self, full_text: str) -> str:
-        text_lower = full_text.lower()
-        markers = [
-            "statement of profit and loss",
-            "profit and loss account",
-            "income statement",
-        ]
-        for marker in markers:
-            idx = text_lower.find(marker)
-            if idx == -1:
-                continue
-            # Keep searching until we find an occurrence NOT followed by
-            # page-number-like content (i.e. the actual statement, not TOC)
-            search_from = idx
-            while True:
-                candidate = text_lower.find(marker, search_from)
-                if candidate == -1:
-                    break
-                # Check the 200 chars after this match
-                snippet = text_lower[candidate:candidate + 200]
-                # TOC entries have digits immediately after (page refs)
-                # Real P&L pages have column headers like 'note', 'particulars', 'amount'
-                if any(x in snippet for x in ['particulars', 'note no', 'for the year', 'rupees', '₹']):
-                    logger.info(f"FinancialExtractor: P&L at idx={candidate} via '{marker}'")
-                    return full_text[candidate:candidate + 20000]
-                search_from = candidate + 500
-        
-        logger.warning("FinancialExtractor: P&L section NOT FOUND — falling back to full text")
+        # Bypassing section extraction for testing
         return full_text

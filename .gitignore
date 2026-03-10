@@ -6,3 +6,4 @@ __pycache__/
 .DS_Store
 backend/data/external_datasets/
 frontend/dist/
+backend/data/Vodafone 2025 Annual Report.pdf
