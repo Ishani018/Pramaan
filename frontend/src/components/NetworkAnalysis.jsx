@@ -1,31 +1,19 @@
 /**
- * NetworkAnalysis.jsx – Counterparty Intelligence Network Graph
- * ==============================================================
- * Renders an interactive physics-based 2D force graph from real
- * counterparty intelligence data (shared directors, shell companies,
- * address matches, circular flows).
- *
- * Receives data as props from the analysis response — no mock fetch.
- *
- * Visual conventions (canvas):
- *   - Applicant node  → ink black (#0A0A0A)
- *   - Counterparty    → dark blue (#1E3A5F)
- *   - Shell suspect   → newspaper red (#CC0000)
- *   - Director        → gold (#D4A017)
- *   - Transaction     → flowing particles
+ * NetworkAnalysis.jsx – Counterparty Intelligence
+ * =================================================
+ * Replaces the force graph with a readable relationship map.
+ * Shows: applicant → counterparties with flags, shell detection,
+ * and circular flow alerts. All on the brutalist cream theme.
  */
-import { useEffect, useRef, useState, useCallback } from 'react'
-import ForceGraph2D from 'react-force-graph-2d'
-import { AlertTriangle, Shield, Users, MapPin, Building2 } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, Shield, Users, MapPin, Building2, ChevronDown, Zap } from 'lucide-react'
 
-const NODE_COLORS = {
-    applicant: '#0A0A0A',
-    counterparty: '#1E3A5F',
-    shell: '#CC0000',
-    director: '#D4A017',
+const SEVERITY_STYLE = {
+    CRITICAL: { text: 'text-red', bg: 'bg-red/10', border: 'border-red', badge: 'bg-red text-white' },
+    HIGH: { text: 'text-red', bg: 'bg-paper', border: 'border-red', badge: 'bg-red text-white' },
+    MEDIUM: { text: 'text-yellow', bg: 'bg-yellow/5', border: 'border-yellow', badge: 'bg-yellow text-white' },
+    LOW: { text: 'text-muted', bg: 'bg-paper', border: 'border-border', badge: 'bg-paper-raised text-ink border border-border' },
 }
-const LINK_COLOR = '#444444'
-const PARTICLE_COLOR = '#CC0000'
 
 const FLAG_ICONS = {
     shared_director: Users,
@@ -35,111 +23,239 @@ const FLAG_ICONS = {
     circular_loop: AlertTriangle,
 }
 
-/* Paint custom node: filled circle + two-line label */
-function drawNode(node, ctx, globalScale) {
-    const r = 18
-    const label1 = (node.label || node.id).split('\n')[0]
-    const label2 = (node.label || node.id).split('\n')[1] || ''
-    const color = NODE_COLORS[node.type] || '#444444'
+function CounterpartyCard({ profile, flags, isExpanded, onToggle }) {
+    const isShell = profile.is_shell_suspect
+    const relatedFlags = flags.filter(f =>
+        f.entity_a === profile.name || f.entity_b === profile.name
+    )
+    const worstSeverity = relatedFlags.reduce((worst, f) => {
+        const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
+        return (order[f.severity] || 3) < (order[worst] || 3) ? f.severity : worst
+    }, 'LOW')
+    const style = SEVERITY_STYLE[worstSeverity] || SEVERITY_STYLE.LOW
 
-    // Hard shadow (brutalist — no glow)
-    ctx.shadowColor = 'rgba(0,0,0,0.3)'
-    ctx.shadowBlur = 0
-    ctx.shadowOffsetX = 2
-    ctx.shadowOffsetY = 2
+    return (
+        <div className={`border-2 ${isShell ? 'border-red' : style.border} ${isShell ? 'bg-red/5' : 'bg-paper'} transition-colors duration-200`}>
+            <button
+                onClick={onToggle}
+                className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-paper-raised text-left"
+            >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {/* Risk indicator */}
+                    <div className={`w-1.5 self-stretch flex-shrink-0 ${isShell ? 'bg-red' : worstSeverity === 'CRITICAL' || worstSeverity === 'HIGH' ? 'bg-red' : worstSeverity === 'MEDIUM' ? 'bg-yellow' : 'bg-border'}`} />
 
-    // Circle
-    ctx.beginPath()
-    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false)
-    ctx.fillStyle = color
-    ctx.fill()
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-sm font-bold text-ink truncate tracking-tight">{profile.name}</span>
+                            {isShell && (
+                                <span className="px-1.5 py-0.5 bg-red text-white text-[9px] font-mono font-bold uppercase tracking-widest border border-red shadow-[2px_2px_0px_rgba(0,0,0,1)]">SHELL</span>
+                            )}
+                            {profile.mca_found && (
+                                <span className={`px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase border-2 shadow-[2px_2px_0px_rgba(0,0,0,0.1)] ${profile.company_status?.toLowerCase().includes('active')
+                                        ? 'border-green text-green bg-green/5'
+                                        : 'border-red text-red bg-red/5'
+                                    }`}>
+                                    {profile.company_status || 'MCA FOUND'}
+                                </span>
+                            )}
+                            {!profile.mca_found && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold text-muted border-2 border-dashed border-border uppercase tracking-wider">UNVERIFIED</span>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5 text-[10px] font-mono text-muted uppercase font-bold tracking-tight">
+                            {profile.cin && <span>CIN: {profile.cin}</span>}
+                            <span>Vol: ₹{(profile.total_volume / 100000).toFixed(1)}L</span>
+                            {profile.mca_found && <span>Cap: ₹{(profile.paid_up_capital / 100000).toFixed(1)}L</span>}
+                        </div>
+                    </div>
+                </div>
 
-    // Reset shadow
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 0
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                    {relatedFlags.length > 0 && (
+                        <span className={`px-1.5 py-0.5 text-[9px] font-mono font-bold border-2 ${style.border} ${style.badge}`}>
+                            {relatedFlags.length} FLAG{relatedFlags.length > 1 ? 'S' : ''}
+                        </span>
+                    )}
+                    <ChevronDown size={14} className={`text-muted transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                </div>
+            </button>
 
-    // Outer ring
-    ctx.strokeStyle = '#FFFFF0'
-    ctx.lineWidth = 2
-    ctx.stroke()
+            {isExpanded && (
+                <div className="border-t-2 border-border px-3 pb-3 bg-paper-raised">
+                    {/* Shell reasons */}
+                    {profile.shell_reasons?.length > 0 && (
+                        <div className="mt-3 p-3 bg-red/5 border-2 border-red shadow-[4px_4px_0px_rgba(239,68,68,0.1)]">
+                            <div className="text-[10px] font-mono font-bold text-red uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                                <AlertTriangle size={12} />
+                                Shell Indicators detected
+                            </div>
+                            {profile.shell_reasons.map((r, j) => (
+                                <p key={j} className="text-xs font-serif text-ink leading-relaxed mb-1">• {r}</p>
+                            ))}
+                        </div>
+                    )}
 
-    // Label line 1 — monospace, bold
-    const fontSize = Math.max(10 / globalScale, 4.5)
-    ctx.font = `bold ${fontSize}px "IBM Plex Mono", monospace`
-    ctx.fillStyle = '#FFFFF0'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(label1, node.x, node.y + r + fontSize * 0.9)
+                    {/* Related flags */}
+                    {relatedFlags.length > 0 && (
+                        <div className="mt-3 flex flex-col gap-2">
+                            {relatedFlags.map((flag, i) => {
+                                const Icon = FLAG_ICONS[flag.flag_type] || AlertTriangle
+                                const fs = SEVERITY_STYLE[flag.severity] || SEVERITY_STYLE.LOW
+                                return (
+                                    <div key={i} className={`flex items-start gap-3 p-3 border-2 ${fs.border} ${fs.bg} relative overflow-hidden`}>
+                                        <div className={`absolute top-0 left-0 w-1 h-full ${fs.badge.split(' ')[0]}`} />
+                                        <Icon size={14} className={`${fs.text} mt-0.5 flex-shrink-0`} />
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${fs.text}`}>
+                                                    {flag.flag_type.replace(/_/g, ' ')}
+                                                </span>
+                                                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 ${fs.badge}`}>
+                                                    {flag.severity}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs font-serif text-ink mt-1 italic">"{flag.evidence}"</p>
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                                <div className="h-[1px] w-4 bg-border" />
+                                                <p className="text-[9px] font-mono text-muted uppercase font-bold">
+                                                    {flag.entity_a} ⟷ {flag.entity_b}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
 
-    // Label line 2 (smaller, dimmed)
-    if (label2) {
-        ctx.font = `${fontSize * 0.85}px "IBM Plex Mono", monospace`
-        ctx.fillStyle = 'rgba(255,255,240,0.5)'
-        ctx.fillText(label2, node.x, node.y + r + fontSize * 2.0)
-    }
+                    {relatedFlags.length === 0 && !profile.shell_reasons?.length && (
+                        <p className="mt-3 text-[10px] font-mono text-muted uppercase tracking-widest text-center py-2 italic font-bold">No specific risk flags</p>
+                    )}
+                </div>
+            )}
+        </div>
+    )
 }
 
-/* Paint edge amount label at the midpoint */
-function drawLink(link, ctx) {
-    if (!link.label) return
-    const mx = (link.source.x + link.target.x) / 2
-    const my = (link.source.y + link.target.y) / 2
-    ctx.font = 'bold 8px "IBM Plex Mono", monospace'
-    ctx.fillStyle = link.type === 'directorship' ? '#D4A017' : '#CC0000'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(link.label, mx, my - 8)
+function CircularFlowSVG({ loop }) {
+    const details = loop.details || {}
+    const debitAmt = details.debit_amount ? `₹${(details.debit_amount / 100000).toFixed(1)}L` : 'OUT'
+    const creditAmt = details.credit_amount ? `₹${(details.credit_amount / 100000).toFixed(1)}L` : 'BACK'
+    const gap = details.days_gap
+    const ratio = details.amount_ratio
+
+    return (
+        <div className="relative p-6 border-2 border-red/40 bg-paper-raised group overflow-hidden">
+            {/* Background pattern */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
+                style={{ backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+
+            <div className="relative z-10">
+                <div className="flex flex-col items-center gap-8">
+                    {/* Nodes and Flow */}
+                    <div className="w-full flex items-center justify-between gap-2 max-w-md mx-auto">
+                        {/* Source Node */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-14 h-14 bg-ink flex items-center justify-center border-4 border-ink shadow-[4px_4px_0px_rgba(0,0,0,0.2)]">
+                                <Building2 size={24} className="text-paper" />
+                            </div>
+                            <span className="text-[10px] font-mono font-black text-ink uppercase text-center max-w-[80px] leading-tight">
+                                {loop.entity_a.split(' ')[0]}
+                            </span>
+                        </div>
+
+                        {/* Animated Flow Track */}
+                        <div className="flex-1 h-32 relative flex items-center">
+                            {/* SVG Arrow paths */}
+                            <svg className="w-full h-full overflow-visible" viewBox="0 0 200 100">
+                                {/* Top path (Debit) */}
+                                <path
+                                    d="M 10 30 Q 100 -20 190 30"
+                                    fill="none"
+                                    stroke="#ef4444"
+                                    strokeWidth="2"
+                                    strokeDasharray="4 4"
+                                    className="animate-flow-dash"
+                                />
+                                <text x="100" y="10" textAnchor="middle" className="fill-red font-mono text-[10px] font-bold uppercase tracking-widest">{debitAmt}</text>
+
+                                {/* Bottom path (Credit) */}
+                                <path
+                                    d="M 190 70 Q 100 120 10 70"
+                                    fill="none"
+                                    stroke="#ef4444"
+                                    strokeWidth="2"
+                                    className="opacity-50"
+                                />
+                                <text x="100" y="95" textAnchor="middle" className="fill-red font-mono text-[10px] font-bold uppercase tracking-widest">{creditAmt}</text>
+
+                                {/* Pulse circles */}
+                                <circle r="3" fill="#ef4444">
+                                    <animateMotion dur="2s" repeatCount="indefinite" path="M 10 30 Q 100 -20 190 30" />
+                                </circle>
+                                <circle r="3" fill="#ef4444">
+                                    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 190 70 Q 100 120 10 70" />
+                                </circle>
+                            </svg>
+                        </div>
+
+                        {/* Counterparty Node */}
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="w-14 h-14 bg-red/10 flex items-center justify-center border-4 border-red shadow-[4px_4px_0px_rgba(239,68,68,0.2)]">
+                                <Building2 size={24} className="text-red" />
+                            </div>
+                            <span className="text-[10px] font-mono font-black text-red uppercase text-center max-w-[80px] leading-tight">
+                                {loop.entity_b.split(' ')[0]}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Metadata indicators */}
+                    <div className="flex items-center gap-6 mt-2">
+                        <div className="flex flex-col items-center">
+                            <span className="text-[8px] font-mono text-muted uppercase font-bold mb-1 tracking-widest">Time Gap</span>
+                            <div className={`px-2 py-1 border-2 font-mono text-xs font-black ${gap <= 7 ? 'bg-red text-white border-red' : 'border-border text-ink'}`}>
+                                {gap} DAYS
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[8px] font-mono text-muted uppercase font-bold mb-1 tracking-widest">Value Match</span>
+                            <div className={`px-2 py-1 border-2 font-mono text-xs font-black ${ratio > 0.8 ? 'bg-red text-white border-red' : 'border-border text-ink'}`}>
+                                {(ratio * 100).toFixed(0)}%
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[8px] font-mono text-muted uppercase font-bold mb-1 tracking-widest">Signal</span>
+                            <div className="px-2 py-1 border-2 border-red text-red font-mono text-xs font-black uppercase tracking-tighter">
+                                ROUND-TRIP
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
 }
 
 export default function NetworkAnalysis({ data }) {
-    const [graphData, setGraphData] = useState(null)
-    const graphRef = useRef()
-    const containerRef = useRef()
-    const [dims, setDims] = useState({ w: 600, h: 420 })
+    const [expandedIdx, setExpandedIdx] = useState(null)
 
     const detected = data?.circular_trading_detected || false
     const flags = data?.relationship_flags || []
     const profiles = data?.counterparty_profiles || []
     const findings = data?.findings || []
 
-    /* Measure container */
-    useEffect(() => {
-        if (!containerRef.current) return
-        const ro = new ResizeObserver(entries => {
-            const { width, height } = entries[0].contentRect
-            setDims({ w: Math.floor(width), h: Math.max(360, Math.floor(height)) })
-        })
-        ro.observe(containerRef.current)
-        return () => ro.disconnect()
-    }, [])
-
-    /* Build graph from data prop */
-    useEffect(() => {
-        if (!data?.nodes || !data?.links) {
-            setGraphData(null)
-            return
-        }
-        setGraphData({
-            nodes: data.nodes.map(n => ({ ...n })),
-            links: data.links.map(l => ({ ...l })),
-        })
-    }, [data])
-
-    /* Auto-fit on data load */
-    const handleEngineStop = useCallback(() => {
-        graphRef.current?.zoomToFit(400, 60)
-    }, [])
-
     /* ── No data state ── */
-    if (!data || (!data.nodes?.length && !flags.length)) {
+    if (!data || (!profiles.length && !flags.length)) {
         return (
-            <div className="flex flex-col items-center justify-center p-10 bg-paper border-[3px] border-ink">
-                <Shield size={36} className="text-ink-muted mb-4" />
-                <p className="text-sm font-display font-bold text-ink uppercase tracking-wide">No Counterparty Risk Detected</p>
-                <p className="text-xs text-ink-muted mt-2 max-w-sm text-center font-serif">
-                    Upload a bank statement CSV to enable counterparty intelligence.
-                    The system will look up transaction partners on MCA and detect
-                    shared directors, shell entities, and circular flows.
+            <div className="flex flex-col items-center justify-center p-12 bg-paper border-[3px] border-ink shadow-[8px_8px_0px_rgba(0,0,0,0.05)]">
+                <div className="w-16 h-16 bg-muted/10 flex items-center justify-center border-2 border-dashed border-muted mb-6">
+                    <Shield size={32} className="text-muted opacity-50" />
+                </div>
+                <p className="text-lg font-display font-black text-ink uppercase tracking-widest">Inert Data Stream</p>
+                <p className="text-xs text-muted mt-3 max-w-sm text-center font-serif italic leading-relaxed">
+                    Upload a bank statement CSV to initialize counterparty intelligence.
+                    The engine will map transaction linkages and flag high-risk registered entities.
                 </p>
             </div>
         )
@@ -147,229 +263,155 @@ export default function NetworkAnalysis({ data }) {
 
     const shellCount = profiles.filter(p => p.is_shell_suspect).length
     const mcaMatches = profiles.filter(p => p.mca_found).length
+    const applicantName = data?.nodes?.find(n => n.type === 'applicant')?.label?.split('\n')[0] || 'Applicant'
 
     return (
-        <div className="flex flex-col gap-6 animate-fade-in">
-            {/* ── NETWORK GRAPH ── */}
-            <div className="border-[3px] border-ink bg-paper relative">
-                <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2 z-10">
-                    <div className="w-2 h-2 bg-ink" />
-                    COUNTERPARTY INTELLIGENCE
+        <div className="flex flex-col gap-8 animate-fade-in max-w-4xl mx-auto">
+            {/* ── SUMMARY DASH ── */}
+            <div className="border-[3px] border-ink bg-paper p-6 relative shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+                <div className="absolute -top-3 left-4 bg-ink px-3 py-0.5 font-display font-black text-paper uppercase tracking-widest text-xs flex items-center gap-2">
+                    <Zap size={10} fill="currentColor" />
+                    Forensic Intelligence Summary
                 </div>
 
-                {/* Sub-header stats */}
-                <div className="flex items-center justify-between px-4 pt-5 pb-2">
-                    <p className="text-[10px] font-mono font-bold text-ink-muted uppercase">
-                        {profiles.length} counterparties &middot; {flags.length} flags
-                        {mcaMatches > 0 && <> &middot; {mcaMatches} MCA matches</>}
-                    </p>
-                    {detected && (
-                        <div className="inline-block px-2 py-0.5 bg-red text-white text-[10px] font-bold font-mono uppercase">
-                            CIRCULAR TRADING DETECTED
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mt-2">
+                    <div className="group">
+                        <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Entities</div>
+                        <div className="text-3xl font-mono font-black text-ink group-hover:translate-x-1 transition-transform">{profiles.length}</div>
+                    </div>
+                    <div className="group">
+                        <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">MCA Verified</div>
+                        <div className="text-3xl font-mono font-black text-ink group-hover:translate-x-1 transition-transform">{mcaMatches}</div>
+                    </div>
+                    <div className="group">
+                        <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Shell Suspects</div>
+                        <div className={`text-3xl font-mono font-black ${shellCount > 0 ? 'text-red animate-pulse' : 'text-green opacity-40'}`}>{shellCount}</div>
+                    </div>
+                    <div className="group">
+                        <div className="text-[9px] font-mono font-black text-muted uppercase tracking-wider mb-1">Risk Flags</div>
+                        <div className={`text-3xl font-mono font-black ${flags.length > 0 ? 'text-yellow' : 'text-green opacity-40'}`}>{flags.length}</div>
+                    </div>
+                </div>
+
+                {detected && (
+                    <div className="mt-6 p-4 border-2 border-red bg-red/5 flex items-center gap-4 border-l-[8px] shadow-[4px_4px_0px_rgba(239,68,68,0.1)]">
+                        <div className="w-10 h-10 bg-red flex items-center justify-center flex-shrink-0">
+                            <AlertTriangle size={20} className="text-white" />
                         </div>
-                    )}
-                </div>
-
-                {/* Legend */}
-                <div className="flex flex-wrap gap-4 px-4 pb-3 text-[10px] font-mono font-bold uppercase">
-                    {[
-                        { color: '#0A0A0A', label: 'Applicant' },
-                        { color: '#1E3A5F', label: 'Counterparty' },
-                        { color: '#CC0000', label: 'Shell Suspect' },
-                        { color: '#D4A017', label: 'Director' },
-                    ].map(({ color, label }) => (
-                        <span key={label} className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 inline-block border border-ink" style={{ background: color }} />
-                            <span className="text-ink-muted">{label}</span>
-                        </span>
-                    ))}
-                </div>
-
-                {/* Graph canvas — dark bg is intentional for contrast */}
-                <div
-                    ref={containerRef}
-                    className="overflow-hidden border-t-2 border-ink relative"
-                    style={{ backgroundColor: '#0A0A0A', minHeight: 380 }}
-                >
-                    {graphData && (
-                        <ForceGraph2D
-                            ref={graphRef}
-                            width={dims.w}
-                            height={dims.h}
-                            graphData={graphData}
-                            d3AlphaDecay={0.015}
-                            d3VelocityDecay={0.3}
-                            cooldownTicks={120}
-                            onEngineStop={handleEngineStop}
-                            nodeCanvasObject={drawNode}
-                            nodeCanvasObjectMode={() => 'replace'}
-                            nodePointerAreaPaint={(node, color, ctx) => {
-                                ctx.fillStyle = color
-                                ctx.beginPath()
-                                ctx.arc(node.x, node.y, 20, 0, 2 * Math.PI, false)
-                                ctx.fill()
-                            }}
-                            linkColor={() => LINK_COLOR}
-                            linkWidth={2.5}
-                            linkDirectionalArrowLength={10}
-                            linkDirectionalArrowRelPos={1}
-                            linkCurvature={0.25}
-                            linkCanvasObjectMode={() => 'after'}
-                            linkCanvasObject={drawLink}
-                            linkDirectionalParticles={l => l.type === 'directorship' ? 0 : 4}
-                            linkDirectionalParticleWidth={3}
-                            linkDirectionalParticleSpeed={0.006}
-                            linkDirectionalParticleColor={() => PARTICLE_COLOR}
-                            backgroundColor="transparent"
-                        />
-                    )}
-
-                    {/* P-06 watermark */}
-                    {detected && (
-                        <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red px-2 py-1 pointer-events-none">
-                            <span className="w-1.5 h-1.5 bg-white animate-pulse" />
-                            <span className="text-[10px] font-mono font-bold text-white uppercase">P-06 Triggered</span>
-                        </div>
-                    )}
-
-                    {/* Shell count badge */}
-                    {shellCount > 0 && (
-                        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-gold px-2 py-1 pointer-events-none">
-                            <Building2 size={10} className="text-white" />
-                            <span className="text-[10px] font-mono font-bold text-white uppercase">
-                                {shellCount} Shell{shellCount > 1 ? 's' : ''}
+                        <div className="flex-1">
+                            <span className="text-[11px] font-mono font-black text-red uppercase tracking-widest block leading-none mb-1">
+                                P-06: CIRCULAR TRADING DETECTED
+                            </span>
+                            <span className="text-[9px] font-mono font-bold text-red/80 uppercase tracking-tight">
+                                PENALTY APPLIED: +200bps RATE · -30% CREDIT LIMIT · HIGH RISK
                             </span>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
-            {/* ── RELATIONSHIP FLAGS ── */}
-            {flags.length > 0 && (
-                <div className="border-[3px] border-ink bg-paper p-6 relative">
-                    <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
-                        <div className="w-2 h-2 bg-ink" />
-                        RELATIONSHIP FLAGS
+            {/* ── RELATIONSHIP LIST ── */}
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+                <div className="flex-1 w-full border-[3px] border-ink bg-paper p-6 relative">
+                    <div className="absolute -top-3 left-4 bg-paper border-2 border-ink px-3 py-0.5 font-display font-black text-ink uppercase tracking-widest text-xs">
+                        Entity Linkage Map
                     </div>
 
-                    <div className="grid gap-3 mt-2">
-                        {flags.map((flag, i) => {
-                            const Icon = FLAG_ICONS[flag.flag_type] || AlertTriangle
-                            const isCritical = flag.severity === 'CRITICAL'
-                            const isHigh = flag.severity === 'HIGH'
-                            return (
-                                <div
-                                    key={i}
-                                    className={`border-2 p-3 ${
-                                        isCritical ? 'border-red bg-red-light' :
-                                        isHigh ? 'border-gold bg-paper' :
-                                        'border-border bg-paper'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Icon size={13} className={isCritical ? 'text-red' : isHigh ? 'text-gold' : 'text-ink-muted'} />
-                                        <span className={`text-[10px] font-mono font-bold uppercase tracking-wide ${
-                                            isCritical ? 'text-red' : isHigh ? 'text-gold' : 'text-ink'
-                                        }`}>
-                                            {flag.flag_type.replace(/_/g, ' ')}
-                                        </span>
-                                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 ${
-                                            isCritical ? 'bg-red text-white' :
-                                            isHigh ? 'bg-gold text-white' :
-                                            'bg-paper-raised text-ink-muted border border-border'
-                                        }`}>
-                                            {flag.severity}
-                                        </span>
+                    {/* Applicant Hub */}
+                    <div className="flex items-center gap-4 mb-6 p-4 border-[3px] border-ink bg-ink text-paper group overflow-hidden relative">
+                        <div className="absolute top-0 right-0 p-1 opacity-10 group-hover:opacity-30 transition-opacity">
+                            <Shield size={60} />
+                        </div>
+                        <div className="w-12 h-12 bg-paper flex items-center justify-center border-2 border-ink">
+                            <Building2 size={20} className="text-ink" />
+                        </div>
+                        <div>
+                            <div className="text-base font-mono font-black uppercase tracking-tight leading-none mb-1">{applicantName}</div>
+                            <div className="text-[10px] font-mono font-bold text-paper/60 uppercase tracking-widest italic">Primary Subject Organization</div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        {profiles
+                            .sort((a, b) => {
+                                if (a.is_shell_suspect && !b.is_shell_suspect) return -1
+                                if (!a.is_shell_suspect && b.is_shell_suspect) return 1
+                                const aFlags = flags.filter(f => f.entity_a === a.name || f.entity_b === a.name).length
+                                const bFlags = flags.filter(f => f.entity_a === b.name || f.entity_b === b.name).length
+                                return bFlags - aFlags
+                            })
+                            .map((profile, i) => (
+                                <div key={i} className="flex items-start">
+                                    {/* Architectural Connector */}
+                                    <div className="w-10 flex-shrink-0 flex flex-col items-center pt-5">
+                                        <div className={`w-3 h-3 border-2 ${profile.is_shell_suspect ? 'border-red bg-red' : 'border-ink'} rotate-45 mb-1 shadow-[2px_2px_0px_rgba(0,0,0,0.1)]`} />
+                                        <div className={`w-[2px] h-10 border-l-2 border-dashed ${profile.is_shell_suspect ? 'border-red/40' : 'border-border'}`} />
                                     </div>
-                                    <p className="text-xs text-ink font-serif">{flag.evidence}</p>
-                                    <p className="text-[10px] text-ink-muted font-mono mt-1">
-                                        {flag.entity_a} &harr; {flag.entity_b}
-                                    </p>
+                                    <div className="flex-1">
+                                        <CounterpartyCard
+                                            profile={profile}
+                                            flags={flags}
+                                            isExpanded={expandedIdx === i}
+                                            onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
+                                        />
+                                    </div>
                                 </div>
-                            )
-                        })}
+                            ))
+                        }
                     </div>
                 </div>
-            )}
 
-            {/* ── P-06 ALERT ── */}
-            {detected && (
-                <div className="border-[3px] border-red bg-red-light p-6 relative animate-fade-in">
-                    <div className="absolute -top-3 left-4 bg-red px-2 py-0.5 font-mono font-bold text-white uppercase tracking-wider text-[10px] flex items-center gap-2">
-                        <AlertTriangle size={10} />
-                        RULE P-06
-                    </div>
-                    <p className="text-sm font-display font-bold text-red mt-1">
-                        Circular Trading Network Detected
-                    </p>
-                    {findings.map((f, i) => (
-                        <p key={i} className="text-xs text-ink font-serif mt-1">{f}</p>
-                    ))}
-                    <div className="border-t-2 border-red/30 mt-3 pt-2">
-                        <p className="text-[10px] font-mono font-bold text-ink-muted uppercase">
-                            Penalty: <span className="text-red">+200 bps rate, -30% credit limit</span>
-                            &nbsp;&middot;&nbsp;Requires manual review
-                        </p>
-                    </div>
-                </div>
-            )}
+                {/* ── FLOW ANALYSIS SIDEBAR (Circular Loops) ── */}
+                {detected && (
+                    <div className="lg:w-[400px] w-full flex flex-col gap-6">
+                        <div className="border-[3px] border-red bg-paper p-5 relative">
+                            <div className="absolute -top-3 left-4 bg-red px-2 py-0.5 font-mono font-black text-white uppercase tracking-tighter text-[10px] flex items-center gap-2">
+                                <AlertTriangle size={10} />
+                                RULE P-06 ANALYSIS
+                            </div>
 
-            {/* ── COUNTERPARTY PROFILES ── */}
-            {profiles.length > 0 && (
-                <div className="border-[3px] border-ink bg-paper p-6 relative">
-                    <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
-                        <div className="w-2 h-2 bg-ink" />
-                        COUNTERPARTY PROFILES
-                    </div>
-
-                    <div className="overflow-x-auto mt-2">
-                        <table className="w-full text-xs">
-                            <thead>
-                                <tr className="border-b-2 border-ink text-left">
-                                    <th className="py-2 pr-3 font-mono font-bold text-[10px] text-ink-muted uppercase">Counterparty</th>
-                                    <th className="py-2 pr-3 font-mono font-bold text-[10px] text-ink-muted uppercase text-right">Volume</th>
-                                    <th className="py-2 pr-3 font-mono font-bold text-[10px] text-ink-muted uppercase">MCA Status</th>
-                                    <th className="py-2 pr-3 font-mono font-bold text-[10px] text-ink-muted uppercase text-right">Paid-up Capital</th>
-                                    <th className="py-2 font-mono font-bold text-[10px] text-ink-muted uppercase">Flags</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {profiles.map((p, i) => (
-                                    <tr key={i} className={`border-b border-border ${p.is_shell_suspect ? 'bg-red-light' : ''}`}>
-                                        <td className="py-2 pr-3">
-                                            <span className="font-mono font-bold text-ink text-xs">{p.name}</span>
-                                            {p.cin && <span className="text-ink-muted ml-1 text-[10px] font-mono">({p.cin})</span>}
-                                        </td>
-                                        <td className="py-2 pr-3 text-right font-mono font-bold text-ink">
-                                            ₹{(p.total_volume / 100000).toFixed(1)}L
-                                        </td>
-                                        <td className="py-2 pr-3 font-mono text-xs">
-                                            {p.mca_found ? (
-                                                <span className={p.company_status?.toLowerCase().includes('active') ? 'text-ink font-bold' : 'text-red font-bold'}>
-                                                    {p.company_status}
-                                                </span>
-                                            ) : (
-                                                <span className="text-ink-muted italic font-serif">Not found</span>
-                                            )}
-                                        </td>
-                                        <td className="py-2 pr-3 text-right font-mono text-ink">
-                                            {p.mca_found ? `₹${(p.paid_up_capital / 100000).toFixed(1)}L` : '—'}
-                                        </td>
-                                        <td className="py-2">
-                                            {p.is_shell_suspect && (
-                                                <span className="inline-block px-1.5 py-0.5 bg-red text-white text-[10px] font-mono font-bold uppercase">SHELL</span>
-                                            )}
-                                            {p.shell_reasons?.map((r, j) => (
-                                                <p key={j} className="text-ink-muted text-[10px] font-serif mt-0.5">{r}</p>
-                                            ))}
-                                        </td>
-                                    </tr>
+                            <div className="flex flex-col gap-6 mt-4">
+                                {flags.filter(f => f.flag_type === 'circular_loop').map((loop, i) => (
+                                    <CircularFlowSVG key={i} loop={loop} />
                                 ))}
-                            </tbody>
-                        </table>
+
+                                {findings.length > 0 && (
+                                    <div className="border-t-2 border-red/20 pt-4 flex flex-col gap-3">
+                                        <div className="text-[9px] font-mono font-black text-red uppercase tracking-widest">Auditor Narrative</div>
+                                        {findings.map((f, i) => (
+                                            <div key={i} className="flex items-start gap-3">
+                                                <div className="w-1.5 h-1.5 bg-red mt-1.5 flex-shrink-0" />
+                                                <p className="text-[11px] font-serif text-ink italic leading-relaxed opacity-90">{f}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Methodology Stamping */}
+                        <div className="border-2 border-border bg-paper p-4 opacity-60 grayscale hover:grayscale-0 transition-all cursor-default">
+                            <div className="text-[8px] font-mono font-black text-muted uppercase mb-2 tracking-[0.2em]">Verification Protocol</div>
+                            <p className="text-[9px] font-mono text-ink tracking-tight leading-loose uppercase font-bold">
+                                Transacting entities parsed from bank statements and queried against MCA v3 database.
+                                Shell linkage detection threshold: &lt;1L Capital + &lt;2yr Lifecycle.
+                                Deterministic Cross-Referencing. <span className="text-ink underline underline-offset-2">No LLM Input.</span>
+                            </p>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
+
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                @keyframes flow-dash {
+                    to { stroke-dashoffset: -20; }
+                }
+                .animate-flow-dash {
+                    stroke-dasharray: 5 5;
+                    animation: flow-dash 1s linear infinite;
+                }
+            `}} />
         </div>
     )
 }

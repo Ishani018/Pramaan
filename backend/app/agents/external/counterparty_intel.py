@@ -492,50 +492,63 @@ class CounterpartyIntel:
             if t.get("credit", 0) > 0 and t.get("date"):
                 party_credits[party].append({"date": t["date"], "amount": t["credit"]})
 
-        # Find related pairs among counterparties
-        related_pairs = set()
         shell_names = {p.name for p in profiles if p.is_shell_suspect}
+        profile_names = {p.name for p in profiles}
 
-        for profile in profiles:
-            if profile.is_shell_suspect or any(
-                f.entity_b == profile.name and f.flag_type in ("shared_director", "same_address", "family_name")
-                for f in []  # placeholder - flags are built above
-            ):
-                related_pairs.add(profile.name)
-
-        # Look for A→B (debit) and then B'→A (credit) where B and B' might be related
-        # This is a simplified check — in the real world you'd need actual B→C→A chain
-        # For now, flag when money goes OUT to a shell/related party and comes BACK from another
         debit_parties = set(party_debits.keys())
         credit_parties = set(party_credits.keys())
         bothway_parties = debit_parties & credit_parties
 
-        # Parties that are both sending and receiving AND are shell suspects
-        for party in bothway_parties:
-            if party in shell_names:
-                for deb in party_debits[party]:
-                    for cred in party_credits[party]:
-                        if deb["date"] and cred["date"]:
-                            gap = abs((deb["date"] - cred["date"]).days)
-                            if gap <= 30 and deb["amount"] > 100000 and cred["amount"] > 100000:
-                                amount_ratio = min(deb["amount"], cred["amount"]) / max(deb["amount"], cred["amount"])
-                                if amount_ratio > 0.7:  # amounts are suspiciously similar
-                                    loops.append({
-                                        "from": applicant_name,
-                                        "to": party,
-                                        "via": "direct round-trip via shell suspect",
-                                        "debit_amount": deb["amount"],
-                                        "credit_amount": cred["amount"],
-                                        "days_gap": gap,
-                                        "amount_ratio": round(amount_ratio, 2),
-                                        "evidence": (
-                                            f"Round-trip flow via shell suspect '{party}': "
-                                            f"₹{deb['amount']:,.0f} out, ₹{cred['amount']:,.0f} back "
-                                            f"within {gap} days (amount ratio {amount_ratio:.0%})"
-                                        ),
-                                    })
+        seen = set()  # Deduplicate by (party, debit_date, credit_date)
 
-        return loops[:5]  # Cap
+        for party in bothway_parties:
+            # Only check significant counterparties (already in profile list)
+            if party not in profile_names:
+                continue
+
+            is_shell = party in shell_names
+
+            # Shell suspects: lower thresholds (₹1L, 30 days, 70% match)
+            # Non-shell: stricter thresholds (₹5L, 15 days, 85% match)
+            min_amount = 100000 if is_shell else 500000
+            max_gap = 30 if is_shell else 15
+            min_ratio = 0.7 if is_shell else 0.85
+
+            for deb in party_debits[party]:
+                for cred in party_credits[party]:
+                    if not (deb["date"] and cred["date"]):
+                        continue
+                    gap = abs((deb["date"] - cred["date"]).days)
+                    if gap > max_gap or deb["amount"] < min_amount or cred["amount"] < min_amount:
+                        continue
+                    amount_ratio = min(deb["amount"], cred["amount"]) / max(deb["amount"], cred["amount"])
+                    if amount_ratio < min_ratio:
+                        continue
+
+                    key = (party, str(deb["date"]), str(cred["date"]))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+
+                    via_label = "direct round-trip via shell suspect" if is_shell else "direct round-trip"
+                    loops.append({
+                        "from": applicant_name,
+                        "to": party,
+                        "via": via_label,
+                        "debit_amount": deb["amount"],
+                        "credit_amount": cred["amount"],
+                        "days_gap": gap,
+                        "amount_ratio": round(amount_ratio, 2),
+                        "evidence": (
+                            f"Round-trip flow {'via shell suspect ' if is_shell else ''}'{party}': "
+                            f"₹{deb['amount']:,.0f} out, ₹{cred['amount']:,.0f} back "
+                            f"within {gap} days (amount ratio {amount_ratio:.0%})"
+                        ),
+                    })
+
+        # Sort by amount descending, cap at 5
+        loops.sort(key=lambda x: x["debit_amount"], reverse=True)
+        return loops[:5]
 
     def _find_related_roundtrips(
         self,
