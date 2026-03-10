@@ -526,10 +526,15 @@ async def analyze_report(request: Request):
                     ecourts_data = await mock_ecourts()
                     logger.info(f"[{elapsed()}] Using synthetic eCourts fallback")
 
-                if not news_data or not news_data.get("adverse_media_detected"):
-                    from app.api.v1.external_mocks import mock_news
-                    news_data = await mock_news()
-                    logger.info(f"[{elapsed()}] Using synthetic News fallback")
+                if not news_data:
+                    news_data = {
+                        "entity": entity_name,
+                        "adverse_media_detected": False,
+                        "red_flag_count": 0,
+                        "articles_found": 0,
+                        "red_flags": [],
+                        "triggered_rules": []
+                    }
 
                 # ── Step 4.6: MD&A Analysis ───────────────────────────────────────────
                 try:

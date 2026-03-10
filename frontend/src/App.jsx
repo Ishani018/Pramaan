@@ -145,10 +145,8 @@ const PROGRESS_STEPS = [
 // ── Tab config ────────────────────────────────────────────────────────────────
 const TABS = [
     { id: 'decision', label: 'Decision', icon: BarChart2 },
-    { id: 'compliance', label: 'Compliance', icon: ShieldAlert },
     { id: 'cross-verify', label: 'Verify', icon: ShieldCheck },
-    { id: 'intelligence', label: 'Intelligence', icon: Network },
-    { id: 'financials', label: 'Financials', icon: TrendingUp },
+    { id: 'deep-dive', label: 'Deep Dive', icon: Eye },
 ]
 
 const ALL_RULES = [
@@ -906,39 +904,35 @@ export default function App() {
                                     </div>
                                 )}
 
-                                {/* ── TAB 2: COMPLIANCE ─────────────────────────────── */}
-                                {activeTab === 'compliance' && (
-                                    <div className="flex flex-col gap-6">
-                                        <CompliancePanel result={pdfResult} loading={loading} />
+                                {/* ── TAB 2: VERIFY ───────────────────────────────── */}
+                                {activeTab === 'cross-verify' && (
+                                    <CrossVerificationPanel data={pdfResult?.cross_verification} supplyChainData={pdfResult?.supply_chain_risk} networkData={networkData} />
+                                )}
 
+                                {/* ── TAB 3: DEEP DIVE ──────────────────────────────── */}
+                                {activeTab === 'deep-dive' && (
+                                    <div className="flex flex-col gap-3">
+                                        {/* Compliance */}
                                         <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
-                                                    Evidence Heatmap
+                                                    <ShieldAlert size={14} className="text-red" />
+                                                    Compliance & Audit
                                                 </div>
                                                 <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
                                             </summary>
-                                            <div className="p-5">
+                                            <div className="p-5 flex flex-col gap-5">
+                                                <CompliancePanel result={pdfResult} loading={loading} />
                                                 <ComplianceHeatmap result={pdfResult} />
                                             </div>
                                         </details>
-                                    </div>
-                                )}
 
-                                {/* ── TAB 3: VERIFY ───────────────────────────────── */}
-                                {activeTab === 'cross-verify' && (
-                                    <CrossVerificationPanel data={pdfResult?.cross_verification} claims={pdfResult?.claims} supplyChainData={pdfResult?.supply_chain_risk} networkData={networkData} />
-                                )}
-
-                                {/* ── TAB 4: INTELLIGENCE ─────────────────────────── */}
-                                {activeTab === 'intelligence' && (
-                                    <div className="flex flex-col gap-4">
-                                        <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                        {/* Bank Statement */}
+                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
-                                                    Bank Statement
+                                                    <Landmark size={14} />
+                                                    Bank Statement Analysis
                                                 </div>
                                                 <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
                                             </summary>
@@ -947,81 +941,65 @@ export default function App() {
                                             </div>
                                         </details>
 
+                                        {/* Media & Legal */}
                                         <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
+                                                    <AlertCircle size={14} />
                                                     Media & Legal
                                                 </div>
                                                 <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
                                             </summary>
-                                            <div className="p-5 flex flex-col gap-6">
+                                            <div className="p-5 flex flex-col gap-5">
                                                 <AdverseMediaPanel newsData={pdfResult?.news} />
-
-                                                {/* eCourts Litigation Scan */}
-                                                <div className="border-[3px] border-ink bg-paper p-6 relative">
-                                                    <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-sm flex items-center gap-2">
-                                                        <div className="w-2 h-2 bg-ink" />
-                                                        ECOURTS — LITIGATION SCAN
-                                                    </div>
-
-                                                    {(() => {
-                                                        const ec = pdfResult?.ecourts;
-                                                        if (!ec || ec.cases_found === 0) {
-                                                            return (
-                                                                <div className="mt-2 text-sm font-mono text-muted">No cases found via eCourts public API.</div>
-                                                            );
-                                                        }
-                                                        return (
-                                                            <div className="mt-2 flex flex-col gap-4">
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className="border-2 border-border p-3">
-                                                                        <div className="text-xs font-mono font-bold text-muted uppercase">CASES FOUND</div>
-                                                                        <div className="text-2xl font-mono font-bold text-ink">{ec.cases_found}</div>
-                                                                    </div>
-                                                                    <div className="border-2 border-border p-3">
-                                                                        <div className="text-xs font-mono font-bold text-muted uppercase">HIGH-RISK</div>
-                                                                        <div className={`text-2xl font-mono font-bold ${ec.high_risk_cases > 0 ? 'text-red' : 'text-green'}`}>{ec.high_risk_cases}</div>
-                                                                    </div>
-                                                                    {ec.triggered_rules?.includes('P-15') && (
-                                                                        <div className="px-3 py-1 border-[3px] border-red text-red font-mono font-bold uppercase text-xs transform -rotate-1">
-                                                                            P-15 TRIGGERED — LEGAL-01
-                                                                        </div>
-                                                                    )}
+                                                {/* eCourts */}
+                                                {(() => {
+                                                    const ec = pdfResult?.ecourts;
+                                                    if (!ec || ec.cases_found === 0) return (
+                                                        <div className="border-2 border-border p-4">
+                                                            <div className="text-[10px] font-mono font-bold text-muted uppercase mb-1">ECOURTS</div>
+                                                            <div className="text-sm font-mono text-muted">No cases found via eCourts public API.</div>
+                                                        </div>
+                                                    );
+                                                    return (
+                                                        <div className="border-[3px] border-ink bg-paper p-5 relative">
+                                                            <div className="absolute -top-3 left-4 bg-paper px-2 font-display font-black text-ink uppercase tracking-wider text-xs flex items-center gap-2">
+                                                                <div className="w-1.5 h-1.5 bg-ink" /> ECOURTS
+                                                            </div>
+                                                            <div className="mt-2 flex items-center gap-3">
+                                                                <div className="border-2 border-border px-3 py-2 text-center">
+                                                                    <div className="text-[9px] font-mono font-bold text-muted uppercase">CASES</div>
+                                                                    <div className="text-xl font-mono font-bold text-ink">{ec.cases_found}</div>
                                                                 </div>
-
-                                                                {(ec?.findings || []).length > 0 && (
-                                                                    <div className="flex flex-col gap-3">
-                                                                        {(ec?.findings || []).map((f, idx) => (
-                                                                            <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
-                                                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
-                                                                                <div className="font-mono text-xs font-bold text-red uppercase mb-1">[{f?.severity || "INFO"}]</div>
-                                                                                <p className="font-serif text-ink text-sm leading-relaxed">{f?.signal || "Finding signal missing"}</p>
-                                                                                <p className="font-mono text-xs text-muted mt-1">Court: {f?.court || 'N/A'} | Filed: {f?.filing_date || 'N/A'}</p>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
+                                                                <div className="border-2 border-border px-3 py-2 text-center">
+                                                                    <div className="text-[9px] font-mono font-bold text-muted uppercase">HIGH-RISK</div>
+                                                                    <div className={`text-xl font-mono font-bold ${ec.high_risk_cases > 0 ? 'text-red' : 'text-green'}`}>{ec.high_risk_cases}</div>
+                                                                </div>
+                                                                {ec.triggered_rules?.includes('P-15') && (
+                                                                    <span className="px-2 py-1 border-2 border-red text-red font-mono font-bold uppercase text-[10px]">P-15 TRIGGERED</span>
                                                                 )}
                                                             </div>
-                                                        );
-                                                    })()}
-
-                                                    <div className="mt-4 text-[10px] font-mono text-muted uppercase tracking-widest border-t border-border pt-2">
-                                                        eCourts Public API [LIVE]
-                                                    </div>
-                                                </div>
+                                                            {(ec?.findings || []).length > 0 && (
+                                                                <div className="mt-3 flex flex-col gap-2">
+                                                                    {ec.findings.map((f, idx) => (
+                                                                        <div key={idx} className="border-l-2 border-red pl-3 py-1">
+                                                                            <span className="font-mono text-[10px] font-bold text-red uppercase">[{f?.severity || "INFO"}]</span>
+                                                                            <p className="font-serif text-ink text-xs leading-relaxed">{f?.signal || ""}</p>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </details>
-                                    </div>
-                                )}
 
-                                {/* ── TAB 5: FINANCIALS ─────────────────────────────── */}
-                                {activeTab === 'financials' && (
-                                    <div className="flex flex-col gap-4">
-                                        <details open className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+                                        {/* Sector Benchmark */}
+                                        <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
+                                                    <TrendingUp size={14} />
                                                     Sector Benchmark
                                                 </div>
                                                 <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
@@ -1031,26 +1009,25 @@ export default function App() {
                                             </div>
                                         </details>
 
+                                        {/* Restatement */}
                                         <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
+                                                    <FileText size={14} />
                                                     Restatement Analysis
                                                 </div>
                                                 <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
                                             </summary>
                                             <div className="p-5">
-                                                <RestatementAnalysis
-                                                    restatementData={pdfResult?.restatement_data}
-                                                    pdfResult={pdfResult}
-                                                />
+                                                <RestatementAnalysis restatementData={pdfResult?.restatement_data} pdfResult={pdfResult} />
                                             </div>
                                         </details>
 
+                                        {/* Multi-Year Trends */}
                                         <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
+                                                    <TrendingDown size={14} />
                                                     Multi-Year Trends
                                                 </div>
                                                 <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
@@ -1060,61 +1037,50 @@ export default function App() {
                                             </div>
                                         </details>
 
+                                        {/* MD&A Sentiment */}
                                         <details className="group border-[3px] border-ink bg-paper overflow-hidden [&_summary::-webkit-details-marker]:hidden">
                                             <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-paper-raised border-b-2 border-transparent group-open:border-border transition-none">
                                                 <div className="flex items-center gap-2 font-display font-bold uppercase tracking-wide text-ink text-sm">
-                                                    <div className="w-2 h-2 bg-ink" />
+                                                    <Brain size={14} />
                                                     MD&A Sentiment
                                                 </div>
                                                 <ChevronDown size={16} className="text-ink transition-transform group-open:rotate-180" />
                                             </summary>
                                             <div className="p-5">
                                                 {pdfResult?.mda_insights?.status === "success" ? (
-                                                    <div className="flex flex-col gap-6">
-                                                        <div className="grid grid-cols-2 gap-6">
-                                                            <div className="border-2 border-border p-4">
-                                                                <div className="text-xs font-mono font-bold text-muted uppercase mb-1">SENTIMENT SCORE</div>
-                                                                <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.sentiment_score < -0.01 ? 'text-red' :
-                                                                    pdfResult.mda_insights.sentiment_score > 0.01 ? 'text-green' : 'text-[#D4A017]'
-                                                                    }`}>
+                                                    <div className="flex flex-col gap-4">
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="border-2 border-border p-3">
+                                                                <div className="text-[10px] font-mono font-bold text-muted uppercase mb-1">SENTIMENT</div>
+                                                                <div className={`text-2xl font-mono font-bold ${pdfResult.mda_insights.sentiment_score < -0.01 ? 'text-red' : pdfResult.mda_insights.sentiment_score > 0.01 ? 'text-green' : 'text-[#D4A017]'}`}>
                                                                     {pdfResult.mda_insights.sentiment_score}
                                                                 </div>
                                                             </div>
-                                                            <div className="border-2 border-border p-4">
-                                                                <div className="text-xs font-mono font-bold text-muted uppercase mb-1">RISK INTENSITY</div>
-                                                                <div className={`text-3xl font-mono font-bold ${pdfResult.mda_insights.risk_intensity > 0.04 ? 'text-red' :
-                                                                    pdfResult.mda_insights.risk_intensity >= 0.02 ? 'text-[#D4A017]' : 'text-green'
-                                                                    }`}>
+                                                            <div className="border-2 border-border p-3">
+                                                                <div className="text-[10px] font-mono font-bold text-muted uppercase mb-1">RISK INTENSITY</div>
+                                                                <div className={`text-2xl font-mono font-bold ${pdfResult.mda_insights.risk_intensity > 0.04 ? 'text-red' : pdfResult.mda_insights.risk_intensity >= 0.02 ? 'text-[#D4A017]' : 'text-green'}`}>
                                                                     {pdfResult.mda_insights.risk_intensity}
                                                                 </div>
                                                             </div>
                                                         </div>
-
-                                                        <div className="border-[3px] border-border bg-[#F8F9FA] p-6">
-                                                            <h3 className="font-display font-bold text-ink uppercase tracking-wide text-sm mb-4">KEY RISK SENTENCES DETECTED</h3>
-                                                            <div className="flex flex-col gap-3">
-                                                                {pdfResult.mda_insights.extracted_headwinds && pdfResult.mda_insights.extracted_headwinds.length > 0 ? (
-                                                                    pdfResult.mda_insights.extracted_headwinds.map((sentence, idx) => (
-                                                                        <div key={idx} className="bg-white border-2 border-border p-4 shadow-sm relative pl-6 group">
-                                                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-red group-hover:w-2 transition-all"></div>
-                                                                            <p className="font-serif text-ink text-sm leading-relaxed">{sentence}</p>
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    <div className="text-sm font-mono text-muted">No material headwinds detected.</div>
-                                                                )}
+                                                        {pdfResult.mda_insights.extracted_headwinds?.length > 0 && (
+                                                            <div className="flex flex-col gap-2">
+                                                                <div className="text-[10px] font-mono font-bold text-muted uppercase">RISK SENTENCES</div>
+                                                                {pdfResult.mda_insights.extracted_headwinds.map((s, i) => (
+                                                                    <div key={i} className="border-l-2 border-red pl-3 py-1">
+                                                                        <p className="font-serif text-ink text-xs leading-relaxed">{s}</p>
+                                                                    </div>
+                                                                ))}
                                                             </div>
-                                                        </div>
-
-                                                        <div className="text-[10px] font-mono text-muted uppercase tracking-widest text-center border-t border-border pt-4">
-                                                            METHODOLOGY: LOUGHRAN-McDONALD FINANCIAL SENTIMENT DICTIONARY — ZERO LLM CALLS
+                                                        )}
+                                                        <div className="text-[9px] font-mono text-muted uppercase tracking-widest text-center border-t border-border pt-3">
+                                                            LOUGHRAN-McDONALD FINANCIAL SENTIMENT — ZERO LLM
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex flex-col items-center justify-center py-12">
-                                                        <Eye size={24} className="text-muted mb-3" />
-                                                        <h3 className="font-display font-bold text-ink uppercase tracking-wide text-sm">MD&A Not Found</h3>
-                                                        <p className="text-sm font-serif text-muted mt-2 text-center max-w-md">The Management Discussion & Analysis section could not be located or contained insufficient text for evaluation.</p>
+                                                    <div className="text-center py-6">
+                                                        <Eye size={20} className="text-muted mx-auto mb-2" />
+                                                        <p className="text-xs font-mono text-muted">MD&A section not found or insufficient text.</p>
                                                     </div>
                                                 )}
                                             </div>
